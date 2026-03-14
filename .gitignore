@@ -1,0 +1,25 @@
+# Playwright MCP
+.playwright-mcp/
+.claude/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+dist/
+build/
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Generated screenshots and logs
+automation-logs/
+
+# Environment
+.env.local
+.env.*.local

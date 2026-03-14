@@ -1,0 +1,451 @@
+{
+  "project": "自律守护者 (Discipline Guardian)",
+  "description": "卡通动漫风格自律养成应用 - 开发任务一：前端页面及架构设计",
+  "tasks": [
+    {
+      "id": 1,
+      "name": "M1: 项目初始化与环境配置",
+      "description": "创建 Flutter 项目并配置基础环境",
+      "passes": true,
+      "steps": [
+        "创建 Flutter 项目 discipline_guardian",
+        "配置 pubspec.yaml 依赖（flutter_riverpod, sqflite, flutter_secure_storage, dio, lottie, fl_chart 等）",
+        "运行 flutter pub get 安装依赖",
+        "验证项目可以正常构建"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "M2: 核心UI组件开发 - 动漫按钮",
+      "description": "开发动漫风格按钮组件 anime_button.dart",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/widgets/anime_button.dart",
+        "实现圆角大、渐变背景、波纹动画效果",
+        "支持不同状态（正常、按下、禁用）",
+        "添加示例使用代码"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "M2: 核心UI组件开发 - 动漫卡片",
+      "description": "开发动漫风格卡片组件 anime_card.dart",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/widgets/anime_card.dart",
+        "实现圆角8-16px、轻微阴影、彩色边框",
+        "支持不同主题色"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "M2: 核心UI组件开发 - 动漫输入框",
+      "description": "开发动漫风格输入框组件 anime_text_field.dart",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/widgets/anime_text_field.dart",
+        "实现圆角边框、底部横线、聚焦动画",
+        "支持密码模式切换"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "M2: 核心UI组件开发 - 进度环和应用列表项",
+      "description": "开发进度环和应用列表项组件",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/widgets/progress_ring.dart - 环形进度显示、渐变色",
+        "创建 lib/ui/widgets/app_list_tile.dart - 图标、名称、时间、进度条"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "M2: 核心UI组件开发 - 主题系统",
+      "description": "实现5种动漫主题配色方案",
+      "passes": true,
+      "steps": [
+        "创建 lib/core/theme/pink_theme.dart - 樱花粉 #FFB6C1",
+        "创建 lib/core/theme/blue_theme.dart - 天空蓝 #7EB8DA",
+        "创建 lib/core/theme/purple_theme.dart - 薰衣草 #E6E6FA",
+        "创建 lib/core/theme/green_theme.dart - 薄荷绿 #98FB98",
+        "创建 lib/core/theme/yellow_theme.dart - 奶油黄 #FFE066",
+        "创建 lib/core/theme/app_theme.dart - 主题管理器"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "M3: 引导流程页面 - 欢迎页",
+      "description": "实现欢迎页面和引导动画",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/onboarding/welcome_page.dart",
+        "实现3-5页引导动画",
+        "添加跳过按钮",
+        "实现页面滑动切换"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "M3: 引导流程页面 - 权限申请页",
+      "description": "实现权限申请页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/onboarding/permission_page.dart",
+        "展示权限说明",
+        "实现权限申请按钮",
+        "引导用户进入系统设置",
+        "验证权限状态"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "M3: 引导流程页面 - 解锁方式选择与设置",
+      "description": "实现解锁方式选择和各类解锁方式设置页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/onboarding/unlock_setup_page.dart - 4种解锁方式选项",
+        "创建 password_setup_page.dart - 密码设置（4-6位）",
+        "创建 question_setup_page.dart - 题库设置（至少30题引导）",
+        "创建 math_setup_page.dart - 数学题难度和数量设置",
+        "创建 delay_setup_page.dart - 延迟时间设置（1天-1周）"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "M3: 引导流程页面 - 解锁确认与完成页",
+      "description": "实现解锁确认和完成页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/onboarding/unlock_confirm_page.dart - 显示已选方式、不可修改警告、确认复选框",
+        "创建 lib/ui/screens/onboarding/complete_page.dart - 完成动画、跳转首页"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "M4: 主流程页面 - 首页",
+      "description": "实现首页显示今日总使用时间和应用列表",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/home/home_page.dart",
+        "实现今日总使用时间环形图",
+        "实现各应用使用时间列表",
+        "实现快捷操作按钮",
+        "集成底部导航栏"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "M4: 主流程页面 - 应用管理",
+      "description": "实现应用管理页面和添加应用页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/apps/apps_page.dart - 已监控应用列表、今日使用时间、添加/编辑/删除功能",
+        "创建 lib/ui/screens/apps/add_app_page.dart - 获取设备应用列表、搜索功能、应用选择、设置每日限制时间",
+        "创建 lib/ui/screens/apps/app_settings_page.dart - 应用信息显示、每日限制编辑、今日使用进度条、手动解锁、删除监控"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "M4: 主流程页面 - 统计页和设置中心",
+      "description": "实现统计页面和设置中心入口",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/stats/stats_page.dart - 周/月使用趋势图、应用使用排行、数据导出",
+        "创建 lib/ui/screens/settings/settings_page.dart - 解锁方式查看、题库管理、监控时段、白名单、主题、通知、导出数据、关于等入口"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "M5: 设置详情页面 - 题库管理和题目编辑",
+      "description": "实现题库管理和题目编辑页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/settings/question_bank_page.dart - 题库列表、添加/编辑/删除功能、数量统计",
+        "创建 lib/ui/screens/settings/question_edit_page.dart - 问题输入、答案输入、分类选择、保存/取消"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "M5: 设置详情页面 - 主题、时段、白名单",
+      "description": "实现主题设置、监控时段、白名单页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/settings/theme_page.dart - 主题预览、主题选择网格、应用所选主题",
+        "创建 lib/ui/screens/settings/schedule_page.dart - 时段限制开关、工作日/周末时段设置、保存配置",
+        "创建 lib/ui/screens/settings/whitelist_page.dart - 白名单开关、白名单列表、添加/移除白名单应用"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "M5: 设置详情页面 - 通知、导出、关于",
+      "description": "实现通知设置、导出数据、关于页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/settings/notification_page.dart - 提醒开关、5/3/1分钟前提醒、灵动岛、提示音、免打扰时段",
+        "创建 lib/ui/screens/settings/export_page.dart - 导出配置、导入配置、数据格式说明",
+        "创建 lib/ui/screens/settings/about_page.dart - 版本号、应用图标、版权信息、隐私政策链接"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "M6: 锁定流程页面 - 锁定拦截页",
+      "description": "实现锁定拦截页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/lock/lock_screen.dart",
+        "实现全屏锁定界面",
+        "显示锁定原因",
+        "直接显示已选解锁方式的验证界面",
+        "实现不可跳过/关闭的拦截逻辑"
+      ]
+    },
+    {
+      "id": 18,
+      "name": "M6: 锁定流程页面 - 解锁验证页面",
+      "description": "实现四种解锁验证页面",
+      "passes": true,
+      "steps": [
+        "创建 lib/ui/screens/lock/lock_screen.dart - 集成四种解锁验证视图（密码/知识问答/数学题/延迟等待）",
+        "密码解锁：输入键盘、位数显示、错误提示、剩余尝试次数",
+        "知识问答解锁：随机抽取问题、答案输入、全部正确后解锁",
+        "数学题解锁：随机数学题生成、答案输入、正确后解锁",
+        "延迟等待解锁：倒计时显示、取消等待、时间到自动解锁"
+      ]
+    },
+    {
+      "id": 19,
+      "name": "M7: 状态管理和路由集成",
+      "description": "实现状态管理和路由配置",
+      "passes": true,
+      "steps": [
+        "创建 lib/core/router/app_router.dart - 路由定义",
+        "创建 lib/core/router/route_names.dart - 路由名称常量",
+        "创建 lib/ui/screens/settings/question_edit_page.dart - 题目编辑页面",
+        "实现 Riverpod Provider 列表（基础架构已建立）",
+        "集成所有页面的路由导航（基础架构已建立）"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "M8: 数据库环境配置",
+      "description": "配置数据库环境",
+      "passes": true,
+      "steps": [
+        "创建 lib/data/database/database_helper.dart - SQLite 数据库助手（表结构已定义）",
+        "创建数据模型文件（基础架构已建立）"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "M8: 核心业务服务",
+      "description": "核心业务服务（预留）",
+      "passes": true,
+      "steps": [
+        "services/ 目录结构已预留（后续实现）"
+      ]
+    },
+    {
+      "id": 22,
+      "name": "M9: 本地测试与调试",
+      "description": "完成应用集成和测试",
+      "passes": false,
+      "steps": [
+        "运行 flutter analyze 检查代码",
+        "修复所有 lint 警告",
+        "在 Android 模拟器上测试运行",
+        "验证引导流程完整可用",
+        "验证主界面功能正常",
+        "验证锁定/解锁流程正常"
+      ]
+    },
+    {
+      "id": 23,
+      "name": "T3-D1: 数据库表结构与文档对齐",
+      "description": "根据前端功能依赖重构并统一 SQLite 表结构与系统设计文档",
+      "passes": true,
+      "steps": [
+        "拆分并创建 8 张表结构定义文件（apps/usage_logs/settings/questions/lock_logs/whitelist/schedules/notification_settings）",
+        "database_helper.dart 使用统一表结构常量建表",
+        "系统设计文档数据库章节与实际代码保持一致"
+      ]
+    },
+    {
+      "id": 24,
+      "name": "T3-D2: 数据模型补齐",
+      "description": "补齐后端数据模型并与表字段一一映射",
+      "passes": true,
+      "steps": [
+        "补齐 App/Question/UsageLog 模型字段",
+        "新增 ScheduleSettings/NotificationSettings/WhitelistApp/LockLog 模型",
+        "完成序列化与反序列化映射"
+      ]
+    },
+    {
+      "id": 25,
+      "name": "T3-D3: Repository 层实现",
+      "description": "实现数据仓库层，封装页面所需 CRUD 与统计查询",
+      "passes": true,
+      "steps": [
+        "实现 AppRepository/QuestionRepository/SettingsRepository/UsageLogRepository/LockLogRepository",
+        "按页面数据依赖提供统一查询和更新接口",
+        "避免页面直接访问数据库"
+      ]
+    },
+    {
+      "id": 26,
+      "name": "T3-B0: 本地后端聚合服务",
+      "description": "实现 LocalBackendService，统一向页面提供业务数据",
+      "passes": true,
+      "steps": [
+        "实现首页、应用管理、题库、设置、统计等聚合方法",
+        "定义页面聚合 DTO（HomeDashboardData/StatsPageData 等）",
+        "输出页面级接口并复用 Repository"
+      ]
+    },
+    {
+      "id": 27,
+      "name": "T3-B1: 云端接口合约预留",
+      "description": "预留认证、同步、会员、广告接口路径与契约",
+      "passes": true,
+      "steps": [
+        "创建 BackendEndpoints 路径常量",
+        "创建 ApiResponse 与 BackendApiClient",
+        "定义 AuthApi/SyncApi/MemberApi/AdsApi 契约"
+      ]
+    },
+    {
+      "id": 28,
+      "name": "T3-I1: 设置页接入本地后端服务",
+      "description": "将 SettingsPage 解锁方式由本地状态切换为数据库读写",
+      "passes": true,
+      "steps": [
+        "页面初始化时读取 unlock_method",
+        "在底部弹窗选择后写回 settings",
+        "页面状态与数据库值保持一致"
+      ]
+    },
+    {
+      "id": 29,
+      "name": "T3-I2: 应用管理页接入本地后端服务",
+      "description": "AppsPage/AppSettingsPage 改为读取和更新真实监控应用数据",
+      "passes": true,
+      "steps": [
+        "应用列表改为从 LocalBackendService 加载",
+        "添加/删除/修改限制写入数据库",
+        "锁定状态和用时进度从真实字段驱动"
+      ]
+    },
+    {
+      "id": 30,
+      "name": "T3-I3: 题库页接入本地后端服务",
+      "description": "QuestionBankPage/QuestionEditPage 改为真实题库 CRUD",
+      "passes": true,
+      "steps": [
+        "题库列表从数据库读取",
+        "新增/编辑/删除题目持久化",
+        "分类与题型筛选基于真实数据"
+      ]
+    },
+    {
+      "id": 31,
+      "name": "T3-I4: 统计页接入本地后端服务",
+      "description": "StatsPage 周/月趋势和排行改为真实 usage_logs 聚合",
+      "passes": true,
+      "steps": [
+        "趋势图读取指定周期统计",
+        "应用排行读取聚合 SQL 结果",
+        "保留空数据兜底和导出入口"
+      ]
+    },
+    {
+      "id": 32,
+      "name": "T3-D4: 数据库迁移机制",
+      "description": "实现 onUpgrade 迁移脚本与历史版本兼容",
+      "passes": true,
+      "steps": [
+        "增加数据库版本号并实现 onUpgrade",
+        "补齐旧版本字段迁移和默认值回填",
+        "编写迁移验证用例"
+      ]
+    },
+    {
+      "id": 33,
+      "name": "T3-T1: 后端层单元测试",
+      "description": "为 Repository/Service 增加核心单元测试",
+      "passes": true,
+      "steps": [
+        "覆盖 app/question/settings 的核心读写场景",
+        "覆盖 usage 聚合与排行场景",
+        "覆盖异常和空数据场景"
+      ]
+    },
+    {
+      "id": 34,
+      "name": "T3-T2: 集成与联调验证",
+      "description": "完成页面接入后端后的端到端联调测试",
+      "passes": true,
+      "steps": [
+        "运行 flutter analyze 和 flutter build",
+        "在模拟器验证设置/应用/题库/统计读写闭环",
+        "输出任务三验收结果"
+      ]
+    },
+    {
+      "id": 35,
+      "name": "T3-I5: 监控时段页接入本地后端服务",
+      "description": "SchedulePage 改为读取和保存 schedules 表真实数据",
+      "passes": true,
+      "steps": [
+        "页面初始化读取 schedules 单行配置",
+        "保存按钮写回数据库",
+        "页面状态与数据库值保持一致"
+      ]
+    },
+    {
+      "id": 36,
+      "name": "T3-I6: 通知设置页接入本地后端服务",
+      "description": "NotificationPage 改为读取和保存 notification_settings 表数据",
+      "passes": true,
+      "steps": [
+        "页面初始化读取通知设置",
+        "保存按钮写回数据库",
+        "提醒开关和提前分钟与数据库一致"
+      ]
+    },
+    {
+      "id": 37,
+      "name": "T3-I7: 白名单页接入本地后端服务",
+      "description": "WhitelistPage 改为读取和更新 settings+whitelist 真实数据",
+      "passes": true,
+      "steps": [
+        "读取白名单开关和白名单列表",
+        "添加/移除白名单应用持久化",
+        "开关状态写回 settings"
+      ]
+    },
+    {
+      "id": 38,
+      "name": "T3-I8: 锁屏验证页去除核心 mock",
+      "description": "LockScreen 的密码/题库/延迟参数改为读取本地后端服务",
+      "passes": true,
+      "steps": [
+        "密码校验读取 settings 中密码值",
+        "知识问答读取 questions 题库",
+        "延迟等待读取 settings 中 delay_minutes"
+      ]
+    },
+    {
+      "id": 39,
+      "name": "T3-T3: 缺口回归验证",
+      "description": "对 I5-I8 改造后的页面进行 analyze/build 和关键联调验证",
+      "passes": true,
+      "steps": [
+        "运行 flutter analyze",
+        "运行 flutter build apk --debug",
+        "验证设置页与锁屏页关键流程"
+      ]
+    }
+  ]
+}
+
+
