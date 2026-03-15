@@ -326,10 +326,29 @@ class _MainNavigatorState extends State<MainNavigator>
           unlockMethod: UnlockMethod.question,
           onUnlockSuccess: () async {
             await _backendService.unlockApp(app.id);
-            await _backendService.incrementUnlockQuestionCountAfterSuccess();
+            final nextQuestionCount =
+                await _backendService.incrementUnlockQuestionCountAfterSuccess();
             await _backendService.syncNativeInterceptionRules();
             _unlockCooldownByPackage[app.packageName] =
                 DateTime.now().add(_unlockCooldownWindow);
+            if (!mounted) {
+              return;
+            }
+            await showDialog<void>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                title: const Text('解锁成功'),
+                content: Text(
+                  '已允许继续使用 ${app.appName}。\n根据当前解锁曲线，下次需要完成 $nextQuestionCount 题。',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('知道了'),
+                  ),
+                ],
+              ),
+            );
             if (!mounted) {
               return;
             }

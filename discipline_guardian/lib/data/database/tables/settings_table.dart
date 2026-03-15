@@ -8,6 +8,7 @@
 /// 预定义键：
 ///   unlock_method  解锁方式：question
 ///   unlock_question_count 知识问答解锁所需题数
+///   unlock_question_growth_stage 知识问答解锁增长阶段
 ///   theme          主题颜色：pink / blue / lavender / mint / yellow / purple
 ///   password_hash  密码哈希（BCrypt），unlock_method=password 时使用
 ///   delay_minutes  延迟解锁等待分钟数，unlock_method=delay 时使用
@@ -24,6 +25,7 @@ class SettingsTable {
   // 预定义键名
   static const String keyUnlockMethod = 'unlock_method';
   static const String keyUnlockQuestionCount = 'unlock_question_count';
+  static const String keyUnlockQuestionGrowthStage = 'unlock_question_growth_stage';
   static const String keyTheme = 'theme';
   static const String keyPasswordHash = 'password_hash';
   static const String keyDelayMinutes = 'delay_minutes';
@@ -55,6 +57,11 @@ class SettingsTable {
       {
         columnKey: keyUnlockQuestionCount,
         columnValue: '3',
+        columnUpdatedAt: now,
+      },
+      {
+        columnKey: keyUnlockQuestionGrowthStage,
+        columnValue: '0',
         columnUpdatedAt: now,
       },
       {columnKey: keyTheme, columnValue: 'pink', columnUpdatedAt: now},

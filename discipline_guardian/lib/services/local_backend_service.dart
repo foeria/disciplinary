@@ -574,10 +574,7 @@ class LocalBackendService {
   }
 
   Future<int> incrementUnlockQuestionCountAfterSuccess() async {
-    final current = await _settingsRepository.getUnlockQuestionCount();
-    final next = (current + 1).clamp(3, 100);
-    await _settingsRepository.setUnlockQuestionCount(next);
-    return next;
+    return _settingsRepository.incrementUnlockQuestionCountAfterSuccess();
   }
 
   Future<void> setPasswordSecret(String secret) {

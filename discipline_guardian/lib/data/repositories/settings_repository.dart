@@ -37,6 +37,38 @@ class SettingsRepository {
   }
 
   Future<int> getUnlockQuestionCount() async {
+    final baseCount = await _getUnlockQuestionBaseCount();
+    final growthStage = await getUnlockQuestionGrowthStage();
+    return _calculateUnlockQuestionCount(baseCount, growthStage);
+  }
+
+  Future<int> getUnlockQuestionGrowthStage() async {
+    final value = await _getSettingValue(
+      key: SettingsTable.keyUnlockQuestionGrowthStage,
+      fallbackValue: '0',
+    );
+    final parsed = int.tryParse(value) ?? 0;
+    if (parsed < 0) {
+      return 0;
+    }
+    if (parsed > 100) {
+      return 100;
+    }
+    return parsed;
+  }
+
+  Future<int> incrementUnlockQuestionCountAfterSuccess() async {
+    final baseCount = await _getUnlockQuestionBaseCount();
+    final currentStage = await getUnlockQuestionGrowthStage();
+    final nextStage = (currentStage + 1).clamp(0, 100);
+    await _upsertSettingValue(
+      SettingsTable.keyUnlockQuestionGrowthStage,
+      nextStage.toString(),
+    );
+    return _calculateUnlockQuestionCount(baseCount, nextStage);
+  }
+
+  Future<int> _getUnlockQuestionBaseCount() async {
     final value = await _getSettingValue(
       key: SettingsTable.keyUnlockQuestionCount,
       fallbackValue: '3',
@@ -57,6 +89,15 @@ class SettingsRepository {
       SettingsTable.keyUnlockQuestionCount,
       normalized.toString(),
     );
+    await _upsertSettingValue(
+      SettingsTable.keyUnlockQuestionGrowthStage,
+      '0',
+    );
+  }
+
+  int _calculateUnlockQuestionCount(int baseCount, int growthStage) {
+    final requiredCount = baseCount + 2 * growthStage * growthStage;
+    return requiredCount.clamp(3, 100);
   }
 
   Future<void> setPasswordSecret(String value) async {

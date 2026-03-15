@@ -63,7 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '解锁时将从题库中随机抽题，题库内可包含常识题和数学题；每次成功解锁后，下一次所需题数会自动 +1，最多 100 题。',
+                    '解锁时将从题库中随机抽题，题库内可包含常识题和数学题。',
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -278,7 +278,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.quiz_outlined,
                 iconColor: AppTheme.primaryColor,
                 title: '解锁方式',
-                subtitle: '知识问答解锁，当前需答对 $_unlockQuestionCount 题，每次成功解锁后自动 +1',
+                subtitle: '知识问答解锁，当前需答对 $_unlockQuestionCount 题',
                 onTap: () => _openProtectedSettingsAction(
                   configName: '解锁方式',
                   action: () => _showQuestionCountDialog(context),
@@ -372,10 +372,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 iconColor: AppTheme.primaryColor,
                 title: '主题',
                 subtitle: '切换应用主题风格',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ThemePage()),
-                ),
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ThemePage()),
+                  );
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {});
+                },
               ),
               const SizedBox(height: 24),
               _buildSectionTitle('数据'),

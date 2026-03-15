@@ -180,11 +180,15 @@ class _HomePageState extends State<HomePage> {
                 color: const Color(0xFF666666),
               ),
               IconButton(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const ThemePage()),
                   );
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {});
                 },
                 icon: const Icon(Icons.palette_outlined),
                 color: const Color(0xFF666666),
