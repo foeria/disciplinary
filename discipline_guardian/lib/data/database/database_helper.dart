@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
+import 'default_question_bank.dart';
 import 'tables/apps_table.dart';
 import 'tables/questions_table.dart';
 import 'tables/usage_logs_table.dart';
@@ -14,7 +17,7 @@ import 'tables/notification_settings_table.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 6;
 
   DatabaseHelper._init();
 
@@ -79,6 +82,15 @@ class DatabaseHelper {
     }
     if (oldVersion < 3) {
       await _migrateToV3(db);
+    }
+    if (oldVersion < 4) {
+      await _migrateToV4(db);
+    }
+    if (oldVersion < 5) {
+      await _migrateToV5(db);
+    }
+    if (oldVersion < 6) {
+      await _migrateToV6(db);
     }
   }
 
@@ -178,6 +190,18 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> _migrateToV4(Database db) async {
+    await _seedPresetQuestions(db);
+  }
+
+  Future<void> _migrateToV5(Database db) async {
+    await _seedPresetQuestions(db);
+  }
+
+  Future<void> _migrateToV6(Database db) async {
+    await _seedPresetQuestions(db);
+  }
+
   Future<void> _ensureColumn(
     Database db,
     String tableName,
@@ -204,8 +228,6 @@ class DatabaseHelper {
   }
 
   Future<void> _ensureDefaultRows(Database db) async {
-    final now = DateTime.now().toIso8601String();
-
     for (final row in SettingsTable.defaultRows) {
       await db.insert(
         SettingsTable.tableName,
@@ -225,39 +247,7 @@ class DatabaseHelper {
       NotificationSettingsTable.defaultRow,
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
-
-    final questionCount = Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM ${QuestionsTable.tableName}'),
-        ) ??
-        0;
-    if (questionCount > 0) {
-      return;
-    }
-
-    final defaultQuestions = [
-      {'question': '一年有几个季节？', 'answer': '4', 'category': '常识'},
-      {'question': '水的化学式是什么？', 'answer': 'H2O', 'category': '科学'},
-      {'question': '中国的首都是哪里？', 'answer': '北京', 'category': '地理'},
-      {'question': '太阳系中最大的行星是？', 'answer': '木星', 'category': '科学'},
-      {'question': '1+1等于多少？', 'answer': '2', 'category': '数学'},
-    ];
-
-    for (var i = 0; i < defaultQuestions.length; i++) {
-      await db.insert(
-        QuestionsTable.tableName,
-        {
-          QuestionsTable.columnId: 'q_$i',
-          QuestionsTable.columnQuestion: defaultQuestions[i]['question'],
-          QuestionsTable.columnAnswer: defaultQuestions[i]['answer'],
-          QuestionsTable.columnCategory: defaultQuestions[i]['category'],
-          QuestionsTable.columnType: QuestionsTable.typeFill,
-          QuestionsTable.columnOptions: null,
-          QuestionsTable.columnCreatedAt: now,
-          QuestionsTable.columnUpdatedAt: now,
-        },
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
-    }
+    await _seedPresetQuestions(db);
   }
 
   Future<void> _insertDefaultData(Database db) async {
@@ -274,28 +264,28 @@ class DatabaseHelper {
       NotificationSettingsTable.tableName,
       NotificationSettingsTable.defaultRow,
     );
+    await _seedPresetQuestions(db);
+  }
 
-    // 默认题库（填空题）
+  Future<void> _seedPresetQuestions(Database db) async {
     final now = DateTime.now().toIso8601String();
-    final defaultQuestions = [
-      {'question': '一年有几个季节？', 'answer': '4', 'category': '常识'},
-      {'question': '水的化学式是什么？', 'answer': 'H2O', 'category': '科学'},
-      {'question': '中国的首都是哪里？', 'answer': '北京', 'category': '地理'},
-      {'question': '太阳系中最大的行星是？', 'answer': '木星', 'category': '科学'},
-      {'question': '1+1等于多少？', 'answer': '2', 'category': '数学'},
-    ];
-
-    for (var i = 0; i < defaultQuestions.length; i++) {
-      await db.insert(QuestionsTable.tableName, {
-        QuestionsTable.columnId: 'q_$i',
-        QuestionsTable.columnQuestion: defaultQuestions[i]['question'],
-        QuestionsTable.columnAnswer: defaultQuestions[i]['answer'],
-        QuestionsTable.columnCategory: defaultQuestions[i]['category'],
-        QuestionsTable.columnType: QuestionsTable.typeFill,
-        QuestionsTable.columnOptions: null,
-        QuestionsTable.columnCreatedAt: now,
-        QuestionsTable.columnUpdatedAt: now,
-      });
+    for (final seed in presetQuestionSeeds) {
+      await db.insert(
+        QuestionsTable.tableName,
+        {
+          QuestionsTable.columnId: seed.id,
+          QuestionsTable.columnQuestion: seed.question,
+          QuestionsTable.columnAnswer: seed.answer,
+          QuestionsTable.columnCategory: seed.category,
+          QuestionsTable.columnType: seed.type,
+          QuestionsTable.columnOptions: seed.options == null
+              ? null
+              : jsonEncode(seed.options),
+          QuestionsTable.columnCreatedAt: now,
+          QuestionsTable.columnUpdatedAt: now,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
     }
   }
 

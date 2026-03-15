@@ -81,11 +81,13 @@ class SystemPermissionsBridge {
     return result ?? false;
   }
 
-  Future<void> openBatteryOptimizationSettings() async {
+  Future<bool> openBatteryOptimizationSettings() async {
     if (!Platform.isAndroid) {
-      return;
+      return false;
     }
-    await _channel.invokeMethod<void>('openBatteryOptimizationSettings');
+    final result =
+        await _channel.invokeMethod<bool>('openBatteryOptimizationSettings');
+    return result ?? false;
   }
 
   Future<bool> isKeepAliveEnabled() async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/events/app_events.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../services/local_backend_service.dart';
 import '../../widgets/anime_card.dart';
 import '../../widgets/anime_button.dart';
@@ -122,9 +123,9 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
             // Tab 栏
             TabBar(
               controller: _tabController,
-              labelColor: const Color(0xFFFF6B9D),
+              labelColor: AppTheme.primaryColor,
               unselectedLabelColor: const Color(0xFF666666),
-              indicatorColor: const Color(0xFFFF6B9D),
+              indicatorColor: AppTheme.primaryColor,
               tabs: const [
                 Tab(text: '使用趋势'),
                 Tab(text: '应用排行'),
@@ -184,11 +185,11 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFFFF6B9D) : Colors.white,
+                  color: isSelected ? AppTheme.primaryColor : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFFFF6B9D)
+                        ? AppTheme.primaryColor
                         : const Color(0xFFE0E0E0),
                   ),
                 ),
@@ -315,7 +316,7 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: isToday
-                                        ? const Color(0xFFFF6B9D)
+                                        ? AppTheme.primaryColor
                                         : const Color(0xFF999999),
                                   ),
                                 )
@@ -327,8 +328,8 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
                                 height: _getBarHeight(data[index]),
                                 decoration: BoxDecoration(
                                   gradient: isToday
-                                      ? const LinearGradient(
-                                          colors: [Color(0xFFFF6B9D), Color(0xFFFF8E53)],
+                                      ? LinearGradient(
+                                          colors: AppTheme.gradientColors,
                                           begin: Alignment.bottomCenter,
                                           end: Alignment.topCenter,
                                         )
@@ -347,7 +348,7 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
                                 style: TextStyle(
                                   fontSize: 9,
                                   color: isToday
-                                      ? const Color(0xFFFF6B9D)
+                                      ? AppTheme.primaryColor
                                       : const Color(0xFF999999),
                                 ),
                               ),

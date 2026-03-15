@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/local_backend_service.dart';
 import '../../widgets/anime_card.dart';
+import '../lock/lock_screen.dart';
 import 'about_page.dart';
 import 'export_page.dart';
 import 'notification_page.dart';
@@ -62,7 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '解锁时将从题库中随机抽题，题库内可包含常识题和数学题。',
+                    '解锁时将从题库中随机抽题，题库内可包含常识题和数学题；每次成功解锁后，下一次所需题数会自动 +1，最多 100 题。',
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -182,6 +183,70 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Future<bool> _shouldProtectSettingsAccess() async {
+    final apps = await _backendService.getAppsPageData();
+    return apps.isNotEmpty;
+  }
+
+  Future<bool> _requestProtectedSettingsAuthorization(
+    String configName,
+  ) async {
+    if (!await _shouldProtectSettingsAccess()) {
+      return true;
+    }
+    if (!mounted) {
+      return false;
+    }
+
+    var isAuthorized = false;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LockScreen(
+          appName: configName,
+          usedMinutes: 0,
+          limitMinutes: 0,
+          unlockMethod: UnlockMethod.question,
+          titleText: '需要验证',
+          reasonText: '已存在监控应用，修改$configName前请先完成知识问答',
+          showUsageSummary: false,
+          onUnlockSuccess: () async {
+            await _backendService.incrementUnlockQuestionCountAfterSuccess();
+            await _loadSettings();
+            if (!mounted) {
+              return;
+            }
+            isAuthorized = true;
+            Navigator.of(context).pop();
+          },
+          onExitRequested: () async {
+            if (!mounted) {
+              return;
+            }
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
+    return isAuthorized;
+  }
+
+  Future<void> _openProtectedSettingsAction({
+    required String configName,
+    required Future<dynamic> Function() action,
+  }) async {
+    final isAuthorized = await _requestProtectedSettingsAuthorization(
+      configName,
+    );
+    if (!isAuthorized || !mounted) {
+      return;
+    }
+    await action();
+    if (mounted) {
+      await _loadSettings();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -213,24 +278,33 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.quiz_outlined,
                 iconColor: AppTheme.primaryColor,
                 title: '解锁方式',
-                subtitle: '知识问答解锁，当前需答对 $_unlockQuestionCount 题',
-                onTap: () => _showQuestionCountDialog(context),
+                subtitle: '知识问答解锁，当前需答对 $_unlockQuestionCount 题，每次成功解锁后自动 +1',
+                onTap: () => _openProtectedSettingsAction(
+                  configName: '解锁方式',
+                  action: () => _showQuestionCountDialog(context),
+                ),
               ),
               _buildSettingItem(
                 icon: Icons.timelapse_outlined,
                 iconColor: const Color(0xFFFB8C00),
                 title: '解锁后延长时长',
                 subtitle: '当前：$_unlockExtensionMinutes 分钟',
-                onTap: () => _showUnlockExtensionPicker(context),
+                onTap: () => _openProtectedSettingsAction(
+                  configName: '解锁后延长时长',
+                  action: () => _showUnlockExtensionPicker(context),
+                ),
               ),
               _buildSettingItem(
                 icon: Icons.quiz_outlined,
                 iconColor: const Color(0xFF7EB8DA),
                 title: '题库管理',
-                subtitle: '管理知识题与数学题题库',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const QuestionBankPage()),
+                subtitle: '管理填空题与选择题题库',
+                onTap: () => _openProtectedSettingsAction(
+                  configName: '题库管理',
+                  action: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const QuestionBankPage()),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -241,9 +315,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 iconColor: const Color(0xFF9B8FD4),
                 title: '监控时段',
                 subtitle: '设置监控时间段',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SchedulePage()),
+                onTap: () => _openProtectedSettingsAction(
+                  configName: '监控时段',
+                  action: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SchedulePage()),
+                  ),
                 ),
               ),
               _buildSettingItem(
@@ -251,9 +328,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 iconColor: const Color(0xFF5CB85C),
                 title: '白名单',
                 subtitle: '设置白名单应用',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WhitelistPage()),
+                onTap: () => _openProtectedSettingsAction(
+                  configName: '白名单',
+                  action: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WhitelistPage()),
+                  ),
                 ),
               ),
               _buildSettingItem(
@@ -261,9 +341,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 iconColor: const Color(0xFFFF9800),
                 title: '通知设置',
                 subtitle: '提醒开关和提醒方式',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NotificationPage()),
+                onTap: () => _openProtectedSettingsAction(
+                  configName: '通知权限',
+                  action: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationPage()),
+                  ),
                 ),
               ),
               _buildSettingItem(
@@ -271,9 +354,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 iconColor: const Color(0xFF607D8B),
                 title: '系统权限中枢',
                 subtitle: '统一管理无障碍/悬浮窗/使用统计权限',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SystemPermissionsPage()),
+                onTap: () => _openProtectedSettingsAction(
+                  configName: '系统权限中枢',
+                  action: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SystemPermissionsPage(),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

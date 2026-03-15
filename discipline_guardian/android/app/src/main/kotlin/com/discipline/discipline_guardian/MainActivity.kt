@@ -97,6 +97,7 @@ class MainActivity : FlutterActivity() {
 					val launcherApps = packageManager.queryIntentActivities(intent, 0)
 					val apps = launcherApps
 						.distinctBy { it.activityInfo.packageName }
+						.filter { it.activityInfo.packageName != packageName }
 						.map {
 							mapOf(
 								"appName" to it.loadLabel(packageManager).toString(),
@@ -179,8 +180,7 @@ class MainActivity : FlutterActivity() {
 						result.success(true)
 					}
 					"openBatteryOptimizationSettings" -> {
-						openBatteryOptimizationSettings()
-						result.success(true)
+						result.success(openBatteryOptimizationSettings())
 					}
 					"isKeepAliveEnabled" ->
 						result.success(GuardianKeepAliveService.isEnabled(applicationContext))
@@ -524,9 +524,9 @@ class MainActivity : FlutterActivity() {
 		return powerManager.isIgnoringBatteryOptimizations(packageName)
 	}
 
-	private fun openBatteryOptimizationSettings() {
+	private fun openBatteryOptimizationSettings(): Boolean {
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-			return
+			return false
 		}
 
 		val requestIntent = Intent(
@@ -545,10 +545,16 @@ class MainActivity : FlutterActivity() {
 			addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 		}
 
-		when {
-			requestIntent.resolveActivity(packageManager) != null -> startActivity(requestIntent)
-			listIntent.resolveActivity(packageManager) != null -> startActivity(listIntent)
-			else -> startActivity(appDetailsIntent)
+		return try {
+			when {
+				requestIntent.resolveActivity(packageManager) != null -> startActivity(requestIntent)
+				listIntent.resolveActivity(packageManager) != null -> startActivity(listIntent)
+				appDetailsIntent.resolveActivity(packageManager) != null -> startActivity(appDetailsIntent)
+				else -> return false
+			}
+			true
+		} catch (_: Exception) {
+			false
 		}
 	}
 

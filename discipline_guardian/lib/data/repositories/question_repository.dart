@@ -94,11 +94,12 @@ class QuestionRepository {
 
   Future<List<QuestionModel>> getRandomUnlockQuestions({
     int count = 3,
+    QuestionType type = QuestionType.fill,
   }) async {
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery(
-      'SELECT * FROM ${QuestionsTable.tableName} ORDER BY RANDOM() LIMIT ?',
-      [count],
+      'SELECT * FROM ${QuestionsTable.tableName} WHERE ${QuestionsTable.columnType} = ? ORDER BY RANDOM() LIMIT ?',
+      [_typeToString(type), count],
     );
     return rows.map(QuestionModel.fromMap).toList(growable: false);
   }

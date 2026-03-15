@@ -141,12 +141,9 @@ class _SystemPermissionsPageState extends State<SystemPermissionsPage>
                     granted: _notificationGranted,
                     onTap: _openNotificationPermissionFlow,
                   ),
-                  _buildPermissionCard(
-                    title: '电池优化白名单',
-                    subtitle: '尽量减少系统省电策略对后台保活和拦截链路的打断。',
-                    granted: _batteryOptimizationIgnored,
-                    onTap: _backendService.openBatteryOptimizationSettings,
-                  ),
+                  _buildBatteryOptimizationCard(),
+                  _buildBatteryOptimizationGuideCard(),
+                  const SizedBox(height: 10),
                   _buildKeepAliveCard(),
                   const SizedBox(height: 2),
                   _buildEngineStatusCard(),
@@ -284,6 +281,152 @@ class _SystemPermissionsPageState extends State<SystemPermissionsPage>
     await _backendService.openNotificationPermissionSettings();
   }
 
+  Future<void> _openBatteryOptimizationFlow() async {
+    final launched = await _backendService.openBatteryOptimizationSettings();
+    if (!mounted) {
+      return;
+    }
+
+    if (launched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请在系统页面中关闭电池优化限制后返回')),
+      );
+      return;
+    }
+
+    _showBatteryOptimizationGuide();
+  }
+
+  void _showBatteryOptimizationGuide() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '手动配置电池优化白名单',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF333333),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ..._batteryOptimizationGuideSteps.map(
+                  (step) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 22,
+                          height: 22,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFB74D).withValues(
+                              alpha: 0.18,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${_batteryOptimizationGuideSteps.indexOf(step) + 1}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFE09127),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            step,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.45,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('我知道了'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBatteryOptimizationCard() {
+    return _buildPermissionCard(
+      title: '电池优化白名单',
+      subtitle: '无法自动跳转时，请按下方步骤手动设置为“不受限制/无限制”。',
+      granted: _batteryOptimizationIgnored,
+      onTap: _openBatteryOptimizationFlow,
+    );
+  }
+
+  Widget _buildBatteryOptimizationGuideCard() {
+    return AnimeCard(
+      padding: const EdgeInsets.all(16),
+      borderColor: const Color(0xFFFFB74D),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.battery_saver_outlined,
+                size: 18,
+                color: Color(0xFFE09127),
+              ),
+              SizedBox(width: 8),
+              Text(
+                '手动配置步骤',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF333333),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ..._batteryOptimizationGuideSteps.map(
+            (step) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '• $step',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildKeepAliveCard() {
     final statusText = _keepAliveEnabled
         ? (_keepAliveRunning ? '已启用，前台保活服务正在运行' : '已启用，等待系统重新拉起')
@@ -344,6 +487,14 @@ class _SystemPermissionsPageState extends State<SystemPermissionsPage>
                           ? const Color(0xFF4CAF50)
                           : Colors.grey.shade700,
                       fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '若电池优化页无法自动打开，请按上方“电池优化白名单”中的手动步骤配置。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
                     ),
                   ),
                 ],
@@ -493,4 +644,12 @@ class _SystemPermissionsPageState extends State<SystemPermissionsPage>
     final mm = time.minute.toString().padLeft(2, '0');
     return '$appName ($y-$m-$d $hh:$mm)';
   }
+
+  List<String> get _batteryOptimizationGuideSteps => const [
+    '打开系统设置，进入“应用”或“应用管理”，找到“自律守护者”。',
+    '进入“电池”“耗电管理”或“省电策略”，将本应用改为“不受限制”“无限制”或“允许后台活动”。',
+    '如果系统有“自启动管理”“后台弹出界面”“关联启动”，也请一并允许。',
+    '部分机型还需要在最近任务中长按本应用并加锁，避免被一键清理。',
+    '配置完成后返回本页，状态会自动刷新。',
+  ];
 }

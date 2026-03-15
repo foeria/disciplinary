@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/question_model.dart';
 import '../../../services/local_backend_service.dart';
 import '../../widgets/anime_card.dart';
@@ -76,7 +78,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add, color: Color(0xFFFF6B9D)),
+            icon: Icon(Icons.add, color: AppTheme.primaryColor),
             onPressed: () async {
               await Navigator.push(
                 context,
@@ -114,7 +116,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
           );
           await _loadQuestions();
         },
-        backgroundColor: const Color(0xFFFF6B9D),
+        backgroundColor: AppTheme.primaryColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
@@ -133,7 +135,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem('总题数', '${_questions.length}', const Color(0xFFFF6B9D)),
+          _buildStatItem('总题数', '${_questions.length}', AppTheme.primaryColor),
           Container(width: 1, height: 40, color: Colors.grey.shade200),
           _buildStatItem('填空题', '$fillCount', const Color(0xFF7EB8DA)),
           Container(width: 1, height: 40, color: Colors.grey.shade200),
@@ -186,8 +188,8 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
                   ? const Color(0xFF5CB85C) // 填空题 绿
                   : index == 2
                       ? const Color(0xFF9B8FD4) // 选择题 紫
-                      : const Color(0xFFFF6B9D)) // 全部 粉
-              : const Color(0xFF7EB8DA); // 内容分类 蓝
+                  : AppTheme.primaryColor)
+              : AppTheme.primaryColor;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
@@ -242,18 +244,18 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF7EB8DA).withValues(alpha: 0.1),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     question.category,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF7EB8DA)),
+                    style: TextStyle(fontSize: 12, color: AppTheme.primaryColor),
                   ),
                 ),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 20),
-                  color: const Color(0xFF666666),
+                  color: AppTheme.primaryColor,
                   onPressed: () async {
                     await Navigator.push(
                       context,
@@ -451,10 +453,10 @@ class _QuestionEditPageState extends State<QuestionEditPage> {
         actions: [
           TextButton(
             onPressed: _saveQuestion,
-            child: const Text(
+            child: Text(
               '保存',
               style: TextStyle(
-                color: Color(0xFFFF6B9D),
+                color: AppTheme.primaryColor,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -598,7 +600,7 @@ class _QuestionEditPageState extends State<QuestionEditPage> {
                                 borderSide: BorderSide(
                                   color: isCorrect
                                       ? const Color(0xFF43A047)
-                                      : const Color(0xFFFF6B9D),
+                                      : AppTheme.primaryColor,
                                 ),
                               ),
                             ),
@@ -645,9 +647,9 @@ class _QuestionEditPageState extends State<QuestionEditPage> {
                         _selectedCategory = category;
                       });
                     },
-                    selectedColor: const Color(0xFFFF6B9D).withValues(alpha: 0.2),
+                    selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
                     labelStyle: TextStyle(
-                      color: isSelected ? const Color(0xFFFF6B9D) : const Color(0xFF666666),
+                      color: isSelected ? AppTheme.primaryColor : const Color(0xFF666666),
                     ),
                   );
                 }).toList(),

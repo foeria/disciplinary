@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../widgets/anime_card.dart';
 import '../../widgets/anime_button.dart';
 import '../../widgets/anime_text_field.dart';
@@ -138,12 +140,12 @@ class _QuestionEditPageState extends State<QuestionEditPage> {
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? const Color(0xFFFF6B9D)
+                            ? AppTheme.primaryColor
                             : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: isSelected
-                              ? const Color(0xFFFF6B9D)
+                              ? AppTheme.primaryColor
                               : Colors.grey.shade300,
                         ),
                       ),

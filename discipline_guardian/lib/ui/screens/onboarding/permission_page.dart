@@ -178,13 +178,15 @@ class _PermissionPageState extends State<PermissionPage>
       ),
       _PermissionCardData(
         title: '电池优化白名单',
-        description: '降低系统省电策略对后台监控和拦截的影响。',
+        description: '降低系统省电策略对后台监控和拦截的影响；若无法自动跳转，可在后续“系统权限中枢”按步骤手动设置。',
         icon: Icons.battery_charging_full_outlined,
         color: const Color(0xFFFFB74D),
         granted: _batteryOptimizationIgnored,
         required: false,
         actionLabel: '去开启',
-        onTap: _backendService.openBatteryOptimizationSettings,
+        onTap: () async {
+          await _backendService.openBatteryOptimizationSettings();
+        },
       ),
       _PermissionCardData(
         title: '后台保活服务',

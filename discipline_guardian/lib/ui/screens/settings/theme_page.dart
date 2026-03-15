@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../main.dart';
-import '../../widgets/anime_button.dart';
 import '../../widgets/anime_card.dart';
 
 /// 主题页面
@@ -15,6 +14,7 @@ class ThemePage extends StatefulWidget {
 
 class _ThemePageState extends State<ThemePage> {
   late ThemeType _selectedTheme;
+  bool _isApplyingTheme = false;
 
   @override
   void initState() {
@@ -22,19 +22,28 @@ class _ThemePageState extends State<ThemePage> {
     _selectedTheme = AppTheme.currentTheme;
   }
 
-  Future<void> _applyTheme() async {
+  Future<void> _applyTheme(ThemeType theme) async {
+    if (_isApplyingTheme) {
+      return;
+    }
     final appState = DisciplineGuardianApp.of(context);
     if (appState == null) {
       return;
     }
-    await appState.applyTheme(_selectedTheme);
+    setState(() {
+      _selectedTheme = theme;
+      _isApplyingTheme = true;
+    });
+    await appState.applyTheme(theme);
     if (!mounted) {
       return;
     }
+    setState(() {
+      _isApplyingTheme = false;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已切换为 ${AppTheme.getThemeName(_selectedTheme)}')),
+      SnackBar(content: Text('已切换为 ${AppTheme.getThemeName(theme)}')),
     );
-    Navigator.pop(context);
   }
 
   @override
@@ -98,13 +107,31 @@ class _ThemePageState extends State<ThemePage> {
                   );
                 },
               ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: AnimeButton(
-                  text: '应用主题',
-                  gradientColors: gradient,
-                  onPressed: _applyTheme,
+              const SizedBox(height: 24),
+              AnimeCard(
+                padding: const EdgeInsets.all(16),
+                borderColor: primary,
+                child: Row(
+                  children: [
+                    Icon(
+                      _isApplyingTheme
+                          ? Icons.autorenew_rounded
+                          : Icons.touch_app_outlined,
+                      color: primary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _isApplyingTheme
+                            ? '正在应用主题...'
+                            : '点击主题卡片后立即生效，可直接预览当前界面变化。',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF666666),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -179,9 +206,7 @@ class _ThemePageState extends State<ThemePage> {
   ) {
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _selectedTheme = type;
-        });
+        _applyTheme(type);
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

@@ -204,7 +204,7 @@ class LocalBackendService {
     return _systemPermissionsBridge.isIgnoringBatteryOptimizations();
   }
 
-  Future<void> openBatteryOptimizationSettings() {
+  Future<bool> openBatteryOptimizationSettings() {
     return _systemPermissionsBridge.openBatteryOptimizationSettings();
   }
 
@@ -522,6 +522,17 @@ class LocalBackendService {
     return _questionRepository.getQuestions(type: type, category: category);
   }
 
+  Future<List<QuestionModel>> getRandomUnlockQuestions({
+    required int count,
+    QuestionType type = QuestionType.fill,
+  }) {
+    final normalizedCount = count < 1 ? 1 : count;
+    return _questionRepository.getRandomUnlockQuestions(
+      count: normalizedCount,
+      type: type,
+    );
+  }
+
   Future<QuestionModel> addQuestion({
     required String question,
     required String answer,
@@ -560,6 +571,13 @@ class LocalBackendService {
 
   Future<void> setUnlockQuestionCount(int count) {
     return _settingsRepository.setUnlockQuestionCount(count);
+  }
+
+  Future<int> incrementUnlockQuestionCountAfterSuccess() async {
+    final current = await _settingsRepository.getUnlockQuestionCount();
+    final next = (current + 1).clamp(3, 100);
+    await _settingsRepository.setUnlockQuestionCount(next);
+    return next;
   }
 
   Future<void> setPasswordSecret(String secret) {

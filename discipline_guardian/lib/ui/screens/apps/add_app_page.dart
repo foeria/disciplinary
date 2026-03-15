@@ -25,10 +25,12 @@ class AvailableApp {
 /// 添加应用页面
 class AddAppPage extends StatefulWidget {
   final Function(String appName, String packageName, int limitMinutes) onAppSelected;
+  final Set<String> excludedPackages;
 
   const AddAppPage({
     super.key,
     required this.onAppSelected,
+    this.excludedPackages = const <String>{},
   });
 
   @override
@@ -87,6 +89,7 @@ class _AddAppPageState extends State<AddAppPage> {
               );
           })
           .where((app) => app.appName.isNotEmpty && app.packageName.isNotEmpty)
+          .where((app) => !widget.excludedPackages.contains(app.packageName))
           .toList(growable: false)
         ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
 
@@ -245,13 +248,6 @@ class _AddAppPageState extends State<AddAppPage> {
                           color: Color(0xFF333333),
                         ),
                       ),
-                      Text(
-                        app.packageName,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -326,14 +322,6 @@ class _AddAppPageState extends State<AddAppPage> {
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF333333),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _selectedApp!.packageName,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
                           ),
                         ),
                       ],

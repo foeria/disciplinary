@@ -5,6 +5,7 @@ import '../../../data/models/app_model.dart';
 import '../../../services/local_backend_service.dart';
 import '../../widgets/anime_card.dart';
 import '../lock/lock_screen.dart';
+import '../settings/system_permissions_page.dart';
 import 'add_app_page.dart';
 import 'app_settings_page.dart';
 
@@ -17,6 +18,7 @@ class MonitoredApp {
   final Color iconColor;
   final int usedMinutes;
   final int limitMinutes;
+  final int effectiveLimitMinutes;
   final bool isLocked;
 
   const MonitoredApp({
@@ -27,6 +29,7 @@ class MonitoredApp {
     required this.iconColor,
     required this.usedMinutes,
     required this.limitMinutes,
+    required this.effectiveLimitMinutes,
     this.isLocked = false,
   });
 }
@@ -141,6 +144,9 @@ class _AppsPageState extends State<AppsPage> {
     MonitoredApp app, {
     required String actionLabel,
   }) async {
+    if (!_requiresManagementAuthorization(app)) {
+      return true;
+    }
     if (!mounted) {
       return false;
     }
@@ -157,6 +163,7 @@ class _AppsPageState extends State<AppsPage> {
           titleText: '需要验证',
           reasonText: '$actionLabel前请先完成验证',
           onUnlockSuccess: () async {
+            await _backendService.incrementUnlockQuestionCountAfterSuccess();
             if (!mounted) {
               return;
             }
@@ -174,6 +181,10 @@ class _AppsPageState extends State<AppsPage> {
     );
 
     return isAuthorized;
+  }
+
+  bool _requiresManagementAuthorization(MonitoredApp app) {
+    return app.isLocked || app.usedMinutes >= app.effectiveLimitMinutes;
   }
 
   Future<void> _confirmDelete(MonitoredApp app) async {
@@ -213,12 +224,85 @@ class _AppsPageState extends State<AppsPage> {
     );
   }
 
-  void _addApp() {
+  Future<bool> _ensureMonitoringPermissionsAssigned() async {
+    final hasUsagePermission =
+        await _backendService.isUsageStatsPermissionGranted();
+    final hasAccessibilityPermission =
+        await _backendService.isAccessibilityPermissionGranted();
+    final hasOverlayPermission =
+        await _backendService.isOverlayPermissionGranted();
+
+    final missingPermissions = <String>[
+      if (!hasUsagePermission) '使用统计权限',
+      if (!hasAccessibilityPermission) '无障碍权限',
+      if (!hasOverlayPermission) '悬浮窗权限',
+    ];
+
+    if (missingPermissions.isEmpty) {
+      return true;
+    }
+    if (!mounted) {
+      return false;
+    }
+
+    final shouldOpenSettings = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('请先完成权限配置'),
+            content: Text(
+              '添加监控应用前，需要先开启以下权限：\n${missingPermissions.map((item) => '• $item').join('\n')}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('暂不添加'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('去配置'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!shouldOpenSettings || !mounted) {
+      return false;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SystemPermissionsPage()),
+    );
+
+    final recheckedUsage = await _backendService.isUsageStatsPermissionGranted();
+    final recheckedAccessibility =
+        await _backendService.isAccessibilityPermissionGranted();
+    final recheckedOverlay = await _backendService.isOverlayPermissionGranted();
+    final isReady =
+        recheckedUsage && recheckedAccessibility && recheckedOverlay;
+
+    if (!isReady && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('关键权限仍未完成，暂时不能添加监控应用')),
+      );
+    }
+    return isReady;
+  }
+
+  Future<void> _addApp() async {
+    final permissionsReady = await _ensureMonitoringPermissionsAssigned();
+    if (!permissionsReady || !mounted) {
+      return;
+    }
     final navigator = Navigator.of(context);
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AddAppPage(
+          excludedPackages: _monitoredApps
+              .map((app) => app.packageName)
+              .toSet(),
           onAppSelected: (appName, packageName, limitMinutes) async {
             await _backendService.addMonitoredApp(
               appName: appName,
@@ -308,8 +392,27 @@ class _AppsPageState extends State<AppsPage> {
       iconColor: _resolveColor(package),
       usedMinutes: app.usedMinutesToday,
       limitMinutes: app.dailyLimitMinutes,
+      effectiveLimitMinutes: _resolveEffectiveLimitMinutes(app),
       isLocked: app.isLocked,
     );
+  }
+
+  int _resolveEffectiveLimitMinutes(AppModel app) {
+    final today = _formatDate(DateTime.now());
+    if (
+      app.unlockLimitOverrideMinutes != null &&
+      app.unlockLimitOverrideDate == today
+    ) {
+      return app.unlockLimitOverrideMinutes!;
+    }
+    return app.dailyLimitMinutes;
+  }
+
+  String _formatDate(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 
   IconData _resolveIcon(String packageName) {
@@ -469,9 +572,9 @@ class _AppsPageState extends State<AppsPage> {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
-                        app.packageName,
+                        app.isLocked ? '已达到限制，点按可查看处理方式' : '点按可查看监控设置',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,

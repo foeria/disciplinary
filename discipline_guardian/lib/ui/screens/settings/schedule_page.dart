@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/schedule_settings_model.dart';
 import '../../../services/local_backend_service.dart';
 import '../../widgets/anime_card.dart';
@@ -167,7 +169,8 @@ class _SchedulePageState extends State<SchedulePage> {
                           _isEnabled = value;
                         });
                       },
-                      activeThumbColor: const Color(0xFFFF6B9D),
+                      activeThumbColor: AppTheme.primaryColor,
+                      activeTrackColor: AppTheme.primaryColor.withValues(alpha: 0.4),
                     ),
                   ],
                 ),
@@ -268,10 +271,10 @@ class _SchedulePageState extends State<SchedulePage> {
             children: [
               Text(
                 time,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFFFF6B9D),
+                  color: AppTheme.primaryColor,
                 ),
               ),
               const SizedBox(width: 8),

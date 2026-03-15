@@ -326,6 +326,7 @@ class _MainNavigatorState extends State<MainNavigator>
           unlockMethod: UnlockMethod.question,
           onUnlockSuccess: () async {
             await _backendService.unlockApp(app.id);
+            await _backendService.incrementUnlockQuestionCountAfterSuccess();
             await _backendService.syncNativeInterceptionRules();
             _unlockCooldownByPackage[app.packageName] =
                 DateTime.now().add(_unlockCooldownWindow);

@@ -131,14 +131,6 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                     color: Color(0xFF333333),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  widget.packageName,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
               ],
             ),
           ),

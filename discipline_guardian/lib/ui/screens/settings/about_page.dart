@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../widgets/anime_card.dart';
 
 /// 关于页面
@@ -55,15 +57,15 @@ class AboutPage extends StatelessWidget {
           width: 100,
           height: 100,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF6B9D), Color(0xFFFF8E53)],
+            gradient: LinearGradient(
+              colors: AppTheme.gradientColors,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF6B9D).withValues(alpha: 0.4),
+                color: AppTheme.primaryColor.withValues(alpha: 0.35),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -103,9 +105,11 @@ class AboutPage extends StatelessWidget {
         children: [
           _buildInfoRow('版本', 'v1.0.0'),
           const Divider(height: 24),
-          _buildInfoRow('构建', '2026.03.07'),
+          _buildInfoRow('支持平台', 'Android'),
           const Divider(height: 24),
-          _buildInfoRow('Flutter', '3.41.4'),
+          _buildInfoRow('核心能力', '应用拦截 / 知识问答解锁'),
+          const Divider(height: 24),
+          _buildInfoRow('数据存储', '本地设备'),
         ],
       ),
     );
@@ -113,7 +117,6 @@ class AboutPage extends StatelessWidget {
 
   Widget _buildInfoRow(String label, String value) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
@@ -122,12 +125,16 @@ class AboutPage extends StatelessWidget {
             color: Color(0xFF666666),
           ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF333333),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF333333),
+            ),
           ),
         ),
       ],
@@ -154,7 +161,7 @@ class AboutPage extends StatelessWidget {
         _buildLinkItem(
           icon: Icons.mail_outline,
           title: '联系我们',
-          subtitle: 'support@discipline-guardian.com',
+          subtitle: 'emmfoeria@gmail.com',
           onTap: () {},
         ),
       ],
@@ -176,10 +183,10 @@ class AboutPage extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFFF6B9D).withValues(alpha: 0.15),
+              color: AppTheme.primaryColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: const Color(0xFFFF6B9D)),
+            child: Icon(icon, color: AppTheme.primaryColor),
           ),
           const SizedBox(width: 12),
           Expanded(
