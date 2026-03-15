@@ -14,7 +14,8 @@ class GuardAccessibilityService : AccessibilityService() {
 		const val PREF_BLOCKED_PACKAGES = "blocked_packages"
 		const val PREF_ENABLED = "interception_enabled"
 		private const val PENDING_PROMPT_DEBOUNCE_MS = 1200L
-		private const val PROMPT_AFTER_HOME_DELAY_MS = 380L
+		private const val PROMPT_AFTER_HOME_DELAY_MS = 160L
+		private const val PROMPT_AFTER_HOME_FALLBACK_DELAY_MS = 320L
 		private const val SHOWN_PROMPT_DEBOUNCE_MS = 900L
 
 		private val blockedPackages = Collections.synchronizedSet(mutableSetOf<String>())
@@ -202,8 +203,12 @@ class GuardAccessibilityService : AccessibilityService() {
 			performGlobalAction(GLOBAL_ACTION_HOME)
 			promptHandler.removeCallbacksAndMessages(null)
 			promptHandler.postDelayed(
-				{ showInterceptPrompt(packageName) },
+				{ showInterceptPrompt(packageName, isFallbackAttempt = false) },
 				PROMPT_AFTER_HOME_DELAY_MS,
+			)
+			promptHandler.postDelayed(
+				{ showInterceptPrompt(packageName, isFallbackAttempt = true) },
+				PROMPT_AFTER_HOME_FALLBACK_DELAY_MS,
 			)
 		}
 	}
@@ -222,8 +227,11 @@ class GuardAccessibilityService : AccessibilityService() {
 		super.onDestroy()
 	}
 
-	private fun showInterceptPrompt(packageName: String) {
+	private fun showInterceptPrompt(packageName: String, isFallbackAttempt: Boolean) {
 		val now = System.currentTimeMillis()
+		if (shouldSkipRecentlyShownPrompt(packageName, now)) {
+			return
+		}
 		if (!consumeReservedPrompt(packageName, now)) {
 			return
 		}
@@ -263,10 +271,18 @@ class GuardAccessibilityService : AccessibilityService() {
 				startActivity(fallbackIntent)
 				launched = true
 			} catch (_: Exception) {
+				if (!isFallbackAttempt) {
+					reservePrompt(packageName, now)
+					return
+				}
 				clearReservedPrompt(packageName)
 			}
 		}
 		if (!launched) {
+			if (!isFallbackAttempt) {
+				reservePrompt(packageName, now)
+				return
+			}
 			clearReservedPrompt(packageName)
 			return
 		}

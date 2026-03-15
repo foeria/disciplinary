@@ -190,8 +190,10 @@ class _MainNavigatorState extends State<MainNavigator>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _promptSignalSubscription = _backendService.watchPromptSignals().listen((_) {
-      unawaited(_runMonitorCycle());
+    _promptSignalSubscription = _backendService.watchPromptSignals().listen((
+      packageName,
+    ) {
+      unawaited(_handlePromptSignal(packageName));
     });
     _runMonitorCycle();
     _monitorTimer = Timer.periodic(
@@ -227,7 +229,41 @@ class _MainNavigatorState extends State<MainNavigator>
     _runMonitorCycle();
   }
 
-  Future<void> _runMonitorCycle() async {
+  Future<void> _handlePromptSignal(String packageName) async {
+    final normalizedPackage = packageName.trim();
+    if (!mounted || normalizedPackage.isEmpty || _isAutoLockVisible) {
+      return;
+    }
+
+    final consumedPromptPackage =
+        await _backendService.consumePromptPackage() ?? normalizedPackage;
+
+    if (_isPromptDebounced(consumedPromptPackage)) {
+      await _backendService.resetPromptState(consumedPromptPackage);
+      await _returnToHome();
+      unawaited(_runMonitorCycle(skipPromptConsumption: true));
+      return;
+    }
+
+    final promptApp = await _backendService.getLockedAppByPackageName(
+      consumedPromptPackage,
+    );
+    if (promptApp != null) {
+      unawaited(_runMonitorCycle(skipPromptConsumption: true));
+      await _presentAutoLockScreen(promptApp);
+      return;
+    }
+
+    await _runMonitorCycle(
+      promptPackageOverride: consumedPromptPackage,
+      skipPromptConsumption: true,
+    );
+  }
+
+  Future<void> _runMonitorCycle({
+    String? promptPackageOverride,
+    bool skipPromptConsumption = false,
+  }) async {
     if (!mounted) {
       return;
     }
@@ -240,7 +276,10 @@ class _MainNavigatorState extends State<MainNavigator>
     try {
       final promptPackage = _isAutoLockVisible
           ? null
-          : await _backendService.consumePromptPackage();
+          : (promptPackageOverride ??
+              (skipPromptConsumption
+                  ? null
+                  : await _backendService.consumePromptPackage()));
 
       final result = await _backendService.syncTodayUsageWithRules();
       final accessibilityGranted =
