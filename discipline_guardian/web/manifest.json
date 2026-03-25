@@ -1,6 +1,6 @@
 {
-    "name": "discipline_guardian",
-    "short_name": "discipline_guardian",
+    "name": "自律守护者",
+    "short_name": "自律守护者",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

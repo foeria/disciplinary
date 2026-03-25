@@ -123,6 +123,99 @@ class _PermissionPageState extends State<PermissionPage>
     await _backendService.setKeepAliveEnabled(true);
   }
 
+  Future<void> _openBatteryOptimizationFlow() async {
+    final launched = await _backendService.openBatteryOptimizationSettings();
+    if (!mounted) {
+      return;
+    }
+
+    if (launched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请在系统页面中关闭电池优化限制后返回')),
+      );
+      return;
+    }
+
+    _showBatteryOptimizationGuide();
+  }
+
+  void _showBatteryOptimizationGuide() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '手动配置电池优化白名单',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF333333),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ..._batteryOptimizationGuideSteps.map(
+                  (step) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 22,
+                          height: 22,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFB74D).withValues(
+                              alpha: 0.18,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${_batteryOptimizationGuideSteps.indexOf(step) + 1}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFE09127),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            step,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.45,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('我知道了'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _continue() async {
     if (!_requiredPermissionsReady) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -184,9 +277,7 @@ class _PermissionPageState extends State<PermissionPage>
         granted: _batteryOptimizationIgnored,
         required: false,
         actionLabel: '去开启',
-        onTap: () async {
-          await _backendService.openBatteryOptimizationSettings();
-        },
+        onTap: _openBatteryOptimizationFlow,
       ),
       _PermissionCardData(
         title: '后台保活服务',
@@ -414,4 +505,12 @@ class _PermissionPageState extends State<PermissionPage>
       ),
     );
   }
+
+  List<String> get _batteryOptimizationGuideSteps => const [
+    '打开系统设置，进入“应用”或“应用管理”，找到“自律守护者”。',
+    '进入“电池”“耗电管理”或“省电策略”，将本应用改为“不受限制”“无限制”或“允许后台活动”。',
+    '如果系统有“自启动管理”“后台弹出界面”或“关联启动”，也请一并允许。',
+    '部分机型还需要在最近任务中长按本应用并加锁，避免被一键清理。',
+    '配置完成后返回本页，状态会自动刷新。',
+  ];
 }

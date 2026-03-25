@@ -88,7 +88,7 @@ class AboutPage extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Discipline Guardian',
+          '自律守护者',
           style: TextStyle(
             fontSize: 14,
             color: Color(0xFF666666),

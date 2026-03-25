@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.discipline" "\0"
-            VALUE "FileDescription", "discipline_guardian" "\0"
+            VALUE "FileDescription", "自律守护者" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "discipline_guardian" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.discipline. All rights reserved." "\0"
             VALUE "OriginalFilename", "discipline_guardian.exe" "\0"
-            VALUE "ProductName", "discipline_guardian" "\0"
+            VALUE "ProductName", "自律守护者" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

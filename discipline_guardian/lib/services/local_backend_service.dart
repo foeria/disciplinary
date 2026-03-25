@@ -382,6 +382,12 @@ class LocalBackendService {
           ? app.unlockLimitOverrideMinutes!
           : app.dailyLimitMinutes;
 
+      if (app.isLocked && usedMinutes < effectiveLimitMinutes) {
+        await _appRepository.setLockedState(appId: app.id, isLocked: false);
+        _unlockCooldownUntil.remove(app.id);
+        continue;
+      }
+
       if (!app.isLocked && usedMinutes >= effectiveLimitMinutes) {
         await _appRepository.setLockedState(appId: app.id, isLocked: true);
         _unlockCooldownUntil.remove(app.id);

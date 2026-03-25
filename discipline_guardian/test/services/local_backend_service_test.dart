@@ -1,8 +1,11 @@
 import 'package:discipline_guardian/data/models/app_model.dart';
+import 'package:discipline_guardian/data/models/schedule_settings_model.dart';
 import 'package:discipline_guardian/data/models/usage_log_model.dart';
 import 'package:discipline_guardian/data/repositories/app_repository.dart';
 import 'package:discipline_guardian/data/repositories/lock_log_repository.dart';
+import 'package:discipline_guardian/data/repositories/settings_repository.dart';
 import 'package:discipline_guardian/data/repositories/usage_log_repository.dart';
+import 'package:discipline_guardian/platform/usage_stats_bridge.dart';
 import 'package:discipline_guardian/services/local_backend_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,6 +16,53 @@ class _FakeAppRepository extends AppRepository {
 
   @override
   Future<List<AppModel>> getMonitoredApps() async => _apps;
+
+  @override
+  Future<void> updateUsedMinutesToday({
+    required String appId,
+    required int usedMinutesToday,
+  }) async {
+    final index = _apps.indexWhere((app) => app.id == appId);
+    if (index == -1) {
+      return;
+    }
+    _apps[index] = _apps[index].copyWith(
+      usedMinutesToday: usedMinutesToday,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<void> setLockedState({
+    required String appId,
+    required bool isLocked,
+  }) async {
+    final index = _apps.indexWhere((app) => app.id == appId);
+    if (index == -1) {
+      return;
+    }
+    _apps[index] = _apps[index].copyWith(
+      isLocked: isLocked,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<void> setUnlockLimitOverride({
+    required String appId,
+    required int? limitMinutes,
+    required String? date,
+  }) async {
+    final index = _apps.indexWhere((app) => app.id == appId);
+    if (index == -1) {
+      return;
+    }
+    _apps[index] = _apps[index].copyWith(
+      unlockLimitOverrideMinutes: limitMinutes,
+      unlockLimitOverrideDate: date,
+      updatedAt: DateTime.now(),
+    );
+  }
 }
 
 class _FakeUsageLogRepository extends UsageLogRepository {
@@ -40,6 +90,18 @@ class _FakeUsageLogRepository extends UsageLogRepository {
   }) async {
     return rankingRows;
   }
+
+  @override
+  Future<void> saveDailyUsage(UsageLogModel log) async {
+    final index = logs.indexWhere(
+      (existing) => existing.appId == log.appId && existing.date == log.date,
+    );
+    if (index >= 0) {
+      logs[index] = log;
+      return;
+    }
+    logs.add(log);
+  }
 }
 
 class _FakeLockLogRepository extends LockLogRepository {
@@ -65,6 +127,40 @@ class _FakeLockLogRepository extends LockLogRepository {
     required String endDate,
   }) async {
     return averageUnlockMinutes;
+  }
+}
+
+class _FakeSettingsRepository extends SettingsRepository {
+  _FakeSettingsRepository({
+    required this.schedule,
+  });
+
+  final ScheduleSettingsModel schedule;
+
+  @override
+  Future<bool> getWhitelistEnabled() async => false;
+
+  @override
+  Future<ScheduleSettingsModel> getScheduleSettings() async => schedule;
+}
+
+class _FakeUsageStatsBridge extends UsageStatsBridge {
+  _FakeUsageStatsBridge(this.usageByPackage);
+
+  final Map<String, int> usageByPackage;
+
+  @override
+  Future<bool> isSupported() async => true;
+
+  @override
+  Future<bool> hasPermission() async => true;
+
+  @override
+  Future<Map<String, int>> getTodayUsageMinutes(List<String> packageNames) async {
+    return {
+      for (final packageName in packageNames)
+        packageName: usageByPackage[packageName] ?? 0,
+    };
   }
 }
 
@@ -176,6 +272,56 @@ void main() {
       expect(data.totalLockCount, 3);
       expect(data.totalUnlockCount, 2);
       expect(data.averageUnlockMinutes, 6);
+    });
+
+    test('syncTodayUsageWithRules unlocks apps after daily usage resets', () async {
+      final now = DateTime.now();
+      final apps = [
+        AppModel(
+          id: 'a1',
+          appName: 'Locked Yesterday',
+          packageName: 'com.example.locked',
+          dailyLimitMinutes: 60,
+          usedMinutesToday: 60,
+          isMonitored: true,
+          isLocked: true,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ];
+      final appRepository = _FakeAppRepository(apps);
+      final usageLogRepository = _FakeUsageLogRepository(
+        logs: <UsageLogModel>[],
+        rankingRows: const [],
+      );
+      final service = LocalBackendService(
+        appRepository: appRepository,
+        settingsRepository: _FakeSettingsRepository(
+          schedule: ScheduleSettingsModel(
+            id: 'default',
+            isEnabled: false,
+            workdayStart: '00:00',
+            workdayEnd: '23:59',
+            weekendStart: '00:00',
+            weekendEnd: '23:59',
+            updatedAt: now,
+          ),
+        ),
+        usageLogRepository: usageLogRepository,
+        usageStatsBridge: _FakeUsageStatsBridge(
+          const {'com.example.locked': 0},
+        ),
+      );
+
+      final result = await service.syncTodayUsageWithRules();
+
+      expect(result.success, isTrue);
+      expect(result.permissionGranted, isTrue);
+      expect(result.newlyLockedApps, isEmpty);
+      expect(apps.single.usedMinutesToday, 0);
+      expect(apps.single.isLocked, isFalse);
+      expect(usageLogRepository.logs, hasLength(1));
+      expect(usageLogRepository.logs.single.usedMinutes, 0);
     });
   });
 }
