@@ -6,6 +6,7 @@ import '../../widgets/anime_card.dart';
 import '../lock/lock_screen.dart';
 import 'about_page.dart';
 import 'export_page.dart';
+import 'growth_level_page.dart';
 import 'notification_page.dart';
 import 'question_bank_page.dart';
 import 'schedule_page.dart';
@@ -25,6 +26,8 @@ class _SettingsPageState extends State<SettingsPage> {
   final LocalBackendService _backendService = LocalBackendService();
   int _unlockQuestionCount = 3;
   int _unlockExtensionMinutes = 15;
+  GrowthCardData? _growthCardData;
+  bool _isGrowthLoading = true;
   static const List<int> _unlockExtensionOptions = <int>[5, 10, 15, 30, 45, 60];
 
   @override
@@ -36,12 +39,20 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadSettings() async {
     final questionCount = await _backendService.getUnlockQuestionCount();
     final unlockExtension = await _backendService.getUnlockExtensionMinutes();
+    GrowthCardData? growthCardData;
+    try {
+      growthCardData = await _backendService.getGrowthCardData();
+    } catch (_) {
+      growthCardData = _growthCardData;
+    }
     if (!mounted) {
       return;
     }
     setState(() {
       _unlockQuestionCount = questionCount;
       _unlockExtensionMinutes = unlockExtension;
+      _growthCardData = growthCardData;
+      _isGrowthLoading = false;
     });
   }
 
@@ -417,45 +428,228 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildUserInfo() {
-    return AnimeCard(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: AppTheme.gradientColors,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+    final card = _growthCardData;
+    final progress = card?.progress ?? 0;
+    final rankName = card?.rankName ?? '成长系统';
+    final rankSubtitle = card == null
+        ? (_isGrowthLoading ? '正在生成你的成长档案...' : '点击查看等级规则与经验记录')
+        : '${card.rankDescription}  距离下一阶 ${card.expToNextRank} EXP';
+    final totalExp = card?.totalExp ?? 0;
+    final todayGainedExp = card?.todayGainedExp ?? 0;
+    final streakDays = card?.currentStreakDays ?? 0;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const GrowthLevelPage()),
+          );
+          if (!mounted) {
+            return;
+          }
+          await _loadSettings();
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.gradientColors.first,
+                AppTheme.gradientColors.last,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            child: const Icon(Icons.person, color: Colors.white, size: 32),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryColor.withValues(alpha: 0.22),
+                blurRadius: 24,
+                offset: const Offset(0, 16),
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '守护者用户',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF333333),
+          child: Stack(
+            children: [
+              Positioned(
+                top: -26,
+                right: -18,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  '今天也要保持专注！',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF666666)),
+              ),
+              Positioned(
+                bottom: -20,
+                left: -8,
+                child: Container(
+                  width: 84,
+                  height: 84,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
                 ),
-              ],
-            ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            card == null ? '成长档案' : '第 ${card.rankIndex} 阶',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.14),
+                          ),
+                          child: Icon(
+                            card?.isMaxRank == true
+                                ? Icons.auto_awesome
+                                : Icons.shield_moon_outlined,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      rankName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      rankSubtitle,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.86),
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        _buildGrowthStatChip('总经验', '$totalExp'),
+                        const SizedBox(width: 10),
+                        _buildGrowthStatChip('今日入账', '+$todayGainedExp'),
+                        const SizedBox(width: 10),
+                        _buildGrowthStatChip('连胜', '$streakDays 天'),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: Container(
+                        height: 10,
+                        color: Colors.white.withValues(alpha: 0.18),
+                        child: TweenAnimationBuilder<double>(
+                          duration: const Duration(milliseconds: 450),
+                          tween: Tween<double>(begin: 0, end: progress),
+                          builder: (context, value, child) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                widthFactor: value.clamp(0.0, 1.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            card == null
+                                ? '点击进入查看完整成长规则'
+                                : (card.isMaxRank
+                                    ? '守护点 ${card.guardPoints} · 守护星 ${card.guardStars}'
+                                    : '当前进度 ${totalExp - card.currentRankStartExp} / ${card.currentRankEndExp - card.currentRankStartExp}'),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.82),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.white,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGrowthStatChip(String label, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.76),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

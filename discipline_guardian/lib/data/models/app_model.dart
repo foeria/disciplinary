@@ -11,6 +11,9 @@ class AppModel {
   final bool isHundredDayPlan;
   final String? planId;
   final DateTime? installedAt;
+  final DateTime? growthNormalJoinBonusAwardedAt;
+  final DateTime? growthPlanStartedAt;
+  final DateTime? growthPlanJoinBonusAwardedAt;
   final int? unlockLimitOverrideMinutes;
   final String? unlockLimitOverrideDate;
   final DateTime createdAt;
@@ -28,6 +31,9 @@ class AppModel {
     this.isHundredDayPlan = false,
     this.planId,
     this.installedAt,
+    this.growthNormalJoinBonusAwardedAt,
+    this.growthPlanStartedAt,
+    this.growthPlanJoinBonusAwardedAt,
     this.unlockLimitOverrideMinutes,
     this.unlockLimitOverrideDate,
     required this.createdAt,
@@ -51,6 +57,21 @@ class AppModel {
       installedAt: (map['installed_at'] as String?) != null
           ? DateTime.parse(map['installed_at'] as String)
           : null,
+      growthNormalJoinBonusAwardedAt:
+          (map['growth_normal_join_bonus_awarded_at'] as String?) != null
+              ? DateTime.parse(
+                  map['growth_normal_join_bonus_awarded_at'] as String,
+                )
+              : null,
+      growthPlanStartedAt: (map['growth_plan_started_at'] as String?) != null
+          ? DateTime.parse(map['growth_plan_started_at'] as String)
+          : null,
+      growthPlanJoinBonusAwardedAt:
+          (map['growth_plan_join_bonus_awarded_at'] as String?) != null
+              ? DateTime.parse(
+                  map['growth_plan_join_bonus_awarded_at'] as String,
+                )
+              : null,
       unlockLimitOverrideMinutes: map['unlock_limit_override_minutes'] as int?,
       unlockLimitOverrideDate: map['unlock_limit_override_date'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
@@ -71,6 +92,11 @@ class AppModel {
       'is_hundred_day_plan': (planId != null || isHundredDayPlan) ? 1 : 0,
       'plan_id': planId,
       'installed_at': installedAt?.toIso8601String(),
+      'growth_normal_join_bonus_awarded_at':
+          growthNormalJoinBonusAwardedAt?.toIso8601String(),
+      'growth_plan_started_at': growthPlanStartedAt?.toIso8601String(),
+      'growth_plan_join_bonus_awarded_at':
+          growthPlanJoinBonusAwardedAt?.toIso8601String(),
       'unlock_limit_override_minutes': unlockLimitOverrideMinutes,
       'unlock_limit_override_date': unlockLimitOverrideDate,
       'created_at': createdAt.toIso8601String(),
@@ -90,6 +116,9 @@ class AppModel {
     bool? isHundredDayPlan,
     String? planId,
     DateTime? installedAt,
+    DateTime? growthNormalJoinBonusAwardedAt,
+    DateTime? growthPlanStartedAt,
+    DateTime? growthPlanJoinBonusAwardedAt,
     int? unlockLimitOverrideMinutes,
     String? unlockLimitOverrideDate,
     DateTime? createdAt,
@@ -108,6 +137,11 @@ class AppModel {
           isHundredDayPlan ?? ((planId ?? this.planId) != null || this.isHundredDayPlan),
       planId: planId ?? this.planId,
       installedAt: installedAt ?? this.installedAt,
+      growthNormalJoinBonusAwardedAt: growthNormalJoinBonusAwardedAt ??
+          this.growthNormalJoinBonusAwardedAt,
+      growthPlanStartedAt: growthPlanStartedAt ?? this.growthPlanStartedAt,
+      growthPlanJoinBonusAwardedAt:
+          growthPlanJoinBonusAwardedAt ?? this.growthPlanJoinBonusAwardedAt,
       unlockLimitOverrideMinutes:
           unlockLimitOverrideMinutes ?? this.unlockLimitOverrideMinutes,
       unlockLimitOverrideDate:

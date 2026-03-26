@@ -1,4 +1,10 @@
+import 'dart:math' as math;
+
+import '../core/growth/growth_rules.dart';
 import '../data/models/app_model.dart';
+import '../data/models/growth_app_log_model.dart';
+import '../data/models/growth_daily_log_model.dart';
+import '../data/models/growth_profile_model.dart';
 import '../data/models/notification_settings_model.dart';
 import '../data/models/plan_model.dart';
 import '../data/models/question_model.dart';
@@ -6,6 +12,7 @@ import '../data/models/schedule_settings_model.dart';
 import '../data/models/usage_log_model.dart';
 import '../data/models/whitelist_app_model.dart';
 import '../data/repositories/app_repository.dart';
+import '../data/repositories/growth_repository.dart';
 import '../data/repositories/lock_log_repository.dart';
 import '../data/repositories/plan_repository.dart';
 import '../data/repositories/question_repository.dart';
@@ -136,6 +143,76 @@ class StatsPageData {
   });
 }
 
+class GrowthRecordItem {
+  final String title;
+  final String subtitle;
+  final int exp;
+  final String status;
+  final bool isPlanRelated;
+  final bool isSystemReward;
+  final DateTime createdAt;
+
+  const GrowthRecordItem({
+    required this.title,
+    required this.subtitle,
+    required this.exp,
+    required this.status,
+    required this.isPlanRelated,
+    required this.isSystemReward,
+    required this.createdAt,
+  });
+}
+
+class GrowthCardData {
+  final int rankIndex;
+  final String rankName;
+  final String rankDescription;
+  final int totalExp;
+  final int currentRankStartExp;
+  final int currentRankEndExp;
+  final int expToNextRank;
+  final double progress;
+  final int todayGainedExp;
+  final int todayEstimatedExp;
+  final int currentStreakDays;
+  final int bestStreakDays;
+  final int guardPoints;
+  final int guardStars;
+  final bool isMaxRank;
+  final String? lastSettlementDate;
+
+  const GrowthCardData({
+    required this.rankIndex,
+    required this.rankName,
+    required this.rankDescription,
+    required this.totalExp,
+    required this.currentRankStartExp,
+    required this.currentRankEndExp,
+    required this.expToNextRank,
+    required this.progress,
+    required this.todayGainedExp,
+    required this.todayEstimatedExp,
+    required this.currentStreakDays,
+    required this.bestStreakDays,
+    required this.guardPoints,
+    required this.guardStars,
+    required this.isMaxRank,
+    required this.lastSettlementDate,
+  });
+}
+
+class GrowthDetailData {
+  final GrowthCardData card;
+  final List<GrowthRecordItem> todayRecords;
+  final List<GrowthDailyLogModel> todaySettlements;
+
+  const GrowthDetailData({
+    required this.card,
+    required this.todayRecords,
+    required this.todaySettlements,
+  });
+}
+
 class HundredDayPlanStatus {
   final String planId;
   final String planName;
@@ -259,6 +336,87 @@ class SystemDiagnosticsData {
   });
 }
 
+enum _GrowthBonusKind {
+  normalJoin,
+  planJoin,
+}
+
+class _PendingGrowthEntry {
+  final String? appId;
+  final String appName;
+  final String packageName;
+  final String? planId;
+  final bool isHundredDayPlan;
+  final int limitMinutes;
+  final int usedMinutes;
+  final int exp;
+  final String status;
+  final String reason;
+  final bool isPlanRelated;
+  final bool isSystemReward;
+  final _GrowthBonusKind? bonusKind;
+
+  const _PendingGrowthEntry({
+    required this.appId,
+    required this.appName,
+    required this.packageName,
+    required this.planId,
+    required this.isHundredDayPlan,
+    required this.limitMinutes,
+    required this.usedMinutes,
+    required this.exp,
+    required this.status,
+    required this.reason,
+    required this.isPlanRelated,
+    required this.isSystemReward,
+    required this.bonusKind,
+  });
+
+  _PendingGrowthEntry copyWith({
+    int? exp,
+  }) {
+    return _PendingGrowthEntry(
+      appId: appId,
+      appName: appName,
+      packageName: packageName,
+      planId: planId,
+      isHundredDayPlan: isHundredDayPlan,
+      limitMinutes: limitMinutes,
+      usedMinutes: usedMinutes,
+      exp: exp ?? this.exp,
+      status: status,
+      reason: reason,
+      isPlanRelated: isPlanRelated,
+      isSystemReward: isSystemReward,
+      bonusKind: bonusKind,
+    );
+  }
+}
+
+class _GrowthSettlementResult {
+  final GrowthProfileModel profile;
+  final GrowthDailyLogModel dailyLog;
+  final List<GrowthAppLogModel> appLogs;
+  final List<_GrowthAwardMark> awardMarks;
+
+  const _GrowthSettlementResult({
+    required this.profile,
+    required this.dailyLog,
+    required this.appLogs,
+    required this.awardMarks,
+  });
+}
+
+class _GrowthAwardMark {
+  final String appId;
+  final _GrowthBonusKind bonusKind;
+
+  const _GrowthAwardMark({
+    required this.appId,
+    required this.bonusKind,
+  });
+}
+
 /// 面向前端页面的数据服务聚合层。
 ///
 /// 设计目标：
@@ -273,6 +431,7 @@ class LocalBackendService {
     QuestionRepository? questionRepository,
     SettingsRepository? settingsRepository,
     UsageLogRepository? usageLogRepository,
+    GrowthRepository? growthRepository,
     LockLogRepository? lockLogRepository,
     PlanRepository? planRepository,
     DeviceAppsBridge? deviceAppsBridge,
@@ -283,6 +442,7 @@ class LocalBackendService {
         _questionRepository = questionRepository ?? QuestionRepository(),
         _settingsRepository = settingsRepository ?? SettingsRepository(),
         _usageLogRepository = usageLogRepository ?? UsageLogRepository(),
+        _growthRepository = growthRepository ?? GrowthRepository(),
         _lockLogRepository = lockLogRepository ?? LockLogRepository(),
         _planRepository = planRepository ?? PlanRepository(),
         _deviceAppsBridge = deviceAppsBridge ?? DeviceAppsBridge(),
@@ -295,6 +455,7 @@ class LocalBackendService {
   final QuestionRepository _questionRepository;
   final SettingsRepository _settingsRepository;
   final UsageLogRepository _usageLogRepository;
+  final GrowthRepository _growthRepository;
   final LockLogRepository _lockLogRepository;
   final PlanRepository _planRepository;
   final DeviceAppsBridge _deviceAppsBridge;
@@ -627,6 +788,8 @@ class LocalBackendService {
   }
 
   Future<UsageSyncResult> syncTodayUsageWithRules() async {
+    await _settleGrowthIfNeeded();
+
     if (!await _usageStatsBridge.isSupported()) {
       return const UsageSyncResult(
         success: false,
@@ -681,14 +844,20 @@ class LocalBackendService {
         usedMinutesToday: usedMinutes,
       );
 
+      final existingLog = await _usageLogRepository.getLogByAppAndDate(
+        appId: app.id,
+        date: today,
+      );
       await _usageLogRepository.saveDailyUsage(
-        UsageLogModel(
-          id: '${app.id}_$today',
-          appId: app.id,
-          date: today,
-          usedMinutes: usedMinutes,
-          unlockCount: 0,
-        ),
+        (existingLog ??
+                UsageLogModel(
+                  id: '${app.id}_$today',
+                  appId: app.id,
+                  date: today,
+                  usedMinutes: usedMinutes,
+                  unlockCount: 0,
+                ))
+            .copyWith(usedMinutes: usedMinutes),
       );
 
       final isWhitelisted = whitelistPackages.contains(app.packageName);
@@ -832,6 +1001,7 @@ class LocalBackendService {
     final extensionMinutes = await _settingsRepository.getUnlockExtensionMinutes();
     final app = await _appRepository.getAppById(appId);
     if (app != null) {
+      final today = _formatDate(DateTime.now());
       final effectiveLimitMinutes = await getEffectiveLimitMinutesForApp(app);
       final baseline = app.usedMinutesToday > effectiveLimitMinutes
           ? app.usedMinutesToday
@@ -839,7 +1009,12 @@ class LocalBackendService {
       await _appRepository.setUnlockLimitOverride(
         appId: appId,
         limitMinutes: baseline + extensionMinutes,
-        date: _formatDate(DateTime.now()),
+        date: today,
+      );
+      await _usageLogRepository.incrementUnlockCount(
+        appId: appId,
+        date: today,
+        usedMinutes: app.usedMinutesToday,
       );
     }
 
@@ -1023,6 +1198,33 @@ class LocalBackendService {
     return _settingsRepository.removeWhitelistApp(whitelistId);
   }
 
+  Future<GrowthCardData> getGrowthCardData() async {
+    await syncTodayUsageWithRules();
+    final profile = await _ensureGrowthProfile();
+    final card = await _buildGrowthCardData(profile);
+    return card;
+  }
+
+  Future<GrowthDetailData> getGrowthDetailData() async {
+    await syncTodayUsageWithRules();
+    final profile = await _ensureGrowthProfile();
+    final card = await _buildGrowthCardData(profile);
+    final today = _formatDate(DateTime.now());
+    final appLogs = await _growthRepository.getAppLogsCreatedOn(today);
+    final dailyLogs = await _growthRepository.getDailyLogsCreatedOn(today);
+
+    final records = appLogs
+        .where((log) => log.expGained > 0)
+        .map(_toGrowthRecordItem)
+        .toList(growable: false);
+
+    return GrowthDetailData(
+      card: card,
+      todayRecords: records,
+      todaySettlements: dailyLogs,
+    );
+  }
+
   Future<StatsPageData> getStatsData({required String period}) async {
     final monitoredApps = await _appRepository.getMonitoredApps();
     await _backfillInstalledAtForApps(monitoredApps);
@@ -1109,6 +1311,588 @@ class LocalBackendService {
       recentUnlockAppName: recentUnlockAppName,
       recentUnlockAt: recentUnlockLog?.unlockedAt,
     );
+  }
+
+  Future<GrowthProfileModel> _ensureGrowthProfile() {
+    return _growthRepository.ensureProfile(
+      initialRankName: GrowthRules.ranks.first.name,
+    );
+  }
+
+  Future<GrowthCardData> _buildGrowthCardData(GrowthProfileModel profile) async {
+    final today = _formatDate(DateTime.now());
+    final todayDailyLogs = await _growthRepository.getDailyLogsCreatedOn(today);
+    final todayGainedExp = todayDailyLogs.fold<int>(
+      0,
+      (sum, log) => sum + log.gainedExp,
+    );
+    final todayEstimatedExp = await _estimateTodayGrowthExp();
+    final rank = GrowthRules.rankForExp(profile.totalExp);
+
+    return GrowthCardData(
+      rankIndex: rank.index,
+      rankName: rank.name,
+      rankDescription: rank.description,
+      totalExp: profile.totalExp,
+      currentRankStartExp: GrowthRules.currentRankStartExp(profile.totalExp),
+      currentRankEndExp: GrowthRules.currentRankEndExp(profile.totalExp),
+      expToNextRank: GrowthRules.expToNextRank(profile.totalExp),
+      progress: GrowthRules.progressWithinRank(profile.totalExp),
+      todayGainedExp: todayGainedExp,
+      todayEstimatedExp: todayEstimatedExp,
+      currentStreakDays: profile.currentStreakDays,
+      bestStreakDays: profile.bestStreakDays,
+      guardPoints: profile.guardPoints,
+      guardStars: profile.guardStars,
+      isMaxRank: profile.totalExp >= GrowthRules.maxTotalExp,
+      lastSettlementDate: profile.lastSettlementDate,
+    );
+  }
+
+  Future<int> _estimateTodayGrowthExp() async {
+    final apps = await _appRepository.getMonitoredApps();
+    if (apps.isEmpty) {
+      return 0;
+    }
+
+    final planStatuses = await getPlanStatuses(monitoredApps: apps);
+    final planStatusById = <String, HundredDayPlanStatus>{
+      for (final plan in planStatuses) plan.planId: plan,
+    };
+    final today = _formatDate(DateTime.now());
+    final usageLogs = await _usageLogRepository.getLogsByDate(today);
+    final usageByAppId = <String, UsageLogModel>{
+      for (final log in usageLogs) log.appId: log,
+    };
+
+    var estimated = 0;
+    final todayDate = _startOfDay(DateTime.now());
+    for (final app in apps) {
+      final isPlan = _isPlanActiveOnDate(
+        app: app,
+        planStatus: app.planId == null ? null : planStatusById[app.planId!],
+        date: todayDate,
+      );
+      final usedMinutes = usageByAppId[app.id]?.usedMinutes ?? app.usedMinutesToday;
+      final unlockCount = usageByAppId[app.id]?.unlockCount ?? 0;
+      final limitMinutes = isPlan ? 30 : math.max(1, app.dailyLimitMinutes);
+
+      int lowUseExp;
+      if (isPlan) {
+        if (usedMinutes > 30) {
+          lowUseExp = 0;
+        } else if (unlockCount > 0) {
+          lowUseExp = 10;
+        } else if (usedMinutes <= 15) {
+          lowUseExp = 25;
+        } else {
+          lowUseExp = 16;
+        }
+      } else if (usedMinutes <= limitMinutes * 0.3) {
+        lowUseExp = 18;
+      } else if (usedMinutes <= limitMinutes * 0.6) {
+        lowUseExp = 12;
+      } else if (usedMinutes <= limitMinutes) {
+        lowUseExp = 6;
+      } else {
+        lowUseExp = 0;
+      }
+
+      final persistExp = isPlan ? 4 : 2;
+      estimated += math.min(
+        GrowthRules.maxPerAppExp,
+        lowUseExp + persistExp,
+      );
+    }
+
+    return math.min(GrowthRules.maxDailyExp, estimated);
+  }
+
+  GrowthRecordItem _toGrowthRecordItem(GrowthAppLogModel log) {
+    return GrowthRecordItem(
+      title: log.appName,
+      subtitle: log.reason,
+      exp: log.expGained,
+      status: log.status,
+      isPlanRelated: log.isHundredDayPlan,
+      isSystemReward: log.appId == null,
+      createdAt: log.createdAt,
+    );
+  }
+
+  Future<void> _settleGrowthIfNeeded() async {
+    final profile = await _ensureGrowthProfile();
+    final now = DateTime.now();
+    final today = _startOfDay(now);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final lastSettlementDate = profile.lastSettlementDate == null
+        ? null
+        : _parseDateOnly(profile.lastSettlementDate!);
+
+    if (lastSettlementDate != null && !yesterday.isAfter(lastSettlementDate)) {
+      return;
+    }
+
+    var apps = await _appRepository.getMonitoredApps();
+    apps = await _backfillInstalledAtForApps(apps);
+
+    if (apps.isEmpty) {
+      await _growthRepository.saveProfile(
+        profile.copyWith(
+          currentStreakDays: 0,
+          lastSettlementDate: _formatDate(yesterday),
+          updatedAt: now,
+        ),
+      );
+      return;
+    }
+
+    final startDate = lastSettlementDate == null
+        ? yesterday
+        : _startOfDay(lastSettlementDate.add(const Duration(days: 1)));
+    if (startDate.isAfter(yesterday)) {
+      return;
+    }
+
+    final usageLogs = await _usageLogRepository.getLogsByDateRange(
+      startDate: _formatDate(startDate),
+      endDate: _formatDate(yesterday),
+    );
+    final usageByAppAndDate = <String, UsageLogModel>{
+      for (final log in usageLogs) '${log.appId}|${log.date}': log,
+    };
+
+    final planStatuses = await getPlanStatuses(monitoredApps: apps);
+    final planStatusById = <String, HundredDayPlanStatus>{
+      for (final plan in planStatuses) plan.planId: plan,
+    };
+
+    var cursor = startDate;
+    var workingProfile = profile;
+    while (!cursor.isAfter(yesterday)) {
+      final result = _buildGrowthSettlementForDate(
+        date: cursor,
+        apps: apps,
+        profile: workingProfile,
+        planStatusById: planStatusById,
+        usageByAppAndDate: usageByAppAndDate,
+      );
+
+      await _growthRepository.saveDailyLog(result.dailyLog);
+      await _growthRepository.replaceAppLogsForDate(
+        date: result.dailyLog.date,
+        logs: result.appLogs,
+      );
+      await _applyGrowthAwardMarks(result.awardMarks);
+      await _growthRepository.saveProfile(result.profile);
+
+      workingProfile = result.profile;
+      cursor = cursor.add(const Duration(days: 1));
+    }
+  }
+
+  _GrowthSettlementResult _buildGrowthSettlementForDate({
+    required DateTime date,
+    required List<AppModel> apps,
+    required GrowthProfileModel profile,
+    required Map<String, HundredDayPlanStatus> planStatusById,
+    required Map<String, UsageLogModel> usageByAppAndDate,
+  }) {
+    final businessDate = _formatDate(date);
+    final createdAt = DateTime.now();
+    final positiveEntries = <_PendingGrowthEntry>[];
+    final failedEntries = <_PendingGrowthEntry>[];
+
+    var qualifiedAppsCount = 0;
+    var failedAppsCount = 0;
+    var hasPlanFailure = false;
+
+    for (final app in apps) {
+      final appCreatedAt = _startOfDay(app.createdAt);
+      if (date.isBefore(appCreatedAt)) {
+        continue;
+      }
+
+      final planStatus = app.planId == null ? null : planStatusById[app.planId!];
+      final isPlan = _isPlanActiveOnDate(
+        app: app,
+        planStatus: planStatus,
+        date: date,
+      );
+      final usageLog = usageByAppAndDate['${app.id}|$businessDate'];
+      final usedMinutes = usageLog?.usedMinutes ?? 0;
+      final unlockCount = usageLog?.unlockCount ?? 0;
+      final limitMinutes = isPlan ? 30 : math.max(1, app.dailyLimitMinutes);
+
+      int lowUseExp = 0;
+      String lowUseStatus = 'failed';
+      String lowUseReason = isPlan ? '昨日超过 30 分钟，未获得计划经验' : '昨日超出限制，未获得克制经验';
+
+      if (isPlan) {
+        if (usedMinutes > 30) {
+          hasPlanFailure = true;
+          failedAppsCount += 1;
+        } else if (unlockCount > 0) {
+          lowUseExp = 10;
+          lowUseStatus = 'pass';
+          lowUseReason = '昨日计划应用虽触发解锁，但总时长仍控制在 30 分钟内';
+          qualifiedAppsCount += 1;
+        } else if (usedMinutes <= 15) {
+          lowUseExp = 25;
+          lowUseStatus = 'perfect';
+          lowUseReason = '昨日计划应用表现极佳，控制在 15 分钟内';
+          qualifiedAppsCount += 1;
+        } else {
+          lowUseExp = 16;
+          lowUseStatus = 'good';
+          lowUseReason = '昨日计划应用达标，控制在 30 分钟内';
+          qualifiedAppsCount += 1;
+        }
+      } else if (usedMinutes <= limitMinutes * 0.3) {
+        lowUseExp = 18;
+        lowUseStatus = 'perfect';
+        lowUseReason = '昨日使用仅占限额 30% 以内，拿到完美克制经验';
+        qualifiedAppsCount += 1;
+      } else if (usedMinutes <= limitMinutes * 0.6) {
+        lowUseExp = 12;
+        lowUseStatus = 'good';
+        lowUseReason = '昨日使用控制在限额 60% 以内，拿到优秀表现经验';
+        qualifiedAppsCount += 1;
+      } else if (usedMinutes <= limitMinutes) {
+        lowUseExp = 6;
+        lowUseStatus = 'pass';
+        lowUseReason = '昨日刚好守住限制，拿到基础达标经验';
+        qualifiedAppsCount += 1;
+      } else {
+        failedAppsCount += 1;
+      }
+
+      if (lowUseExp > 0) {
+        positiveEntries.add(
+          _PendingGrowthEntry(
+            appId: app.id,
+            appName: app.appName,
+            packageName: app.packageName,
+            planId: app.planId,
+            isHundredDayPlan: isPlan,
+            limitMinutes: limitMinutes,
+            usedMinutes: usedMinutes,
+            exp: lowUseExp,
+            status: lowUseStatus,
+            reason: lowUseReason,
+            isPlanRelated: isPlan,
+            isSystemReward: false,
+            bonusKind: null,
+          ),
+        );
+      } else {
+        failedEntries.add(
+          _PendingGrowthEntry(
+            appId: app.id,
+            appName: app.appName,
+            packageName: app.packageName,
+            planId: app.planId,
+            isHundredDayPlan: isPlan,
+            limitMinutes: limitMinutes,
+            usedMinutes: usedMinutes,
+            exp: 0,
+            status: 'failed',
+            reason: lowUseReason,
+            isPlanRelated: isPlan,
+            isSystemReward: false,
+            bonusKind: null,
+          ),
+        );
+      }
+
+      positiveEntries.add(
+        _PendingGrowthEntry(
+          appId: app.id,
+          appName: app.appName,
+          packageName: app.packageName,
+          planId: app.planId,
+          isHundredDayPlan: isPlan,
+          limitMinutes: limitMinutes,
+          usedMinutes: usedMinutes,
+          exp: isPlan ? 4 : 2,
+          status: 'persist',
+          reason: isPlan ? '昨日仍在 100 天计划中，坚持奖励 +4 EXP' : '昨日仍保持纳入管理，坚持奖励 +2 EXP',
+          isPlanRelated: isPlan,
+          isSystemReward: false,
+          bonusKind: null,
+        ),
+      );
+
+      if (isPlan) {
+        final planStartedAt = _startOfDay(app.growthPlanStartedAt ?? app.createdAt);
+        if (
+          app.growthPlanJoinBonusAwardedAt == null &&
+          date.isAfter(planStartedAt)
+        ) {
+          positiveEntries.add(
+            _PendingGrowthEntry(
+              appId: app.id,
+              appName: app.appName,
+              packageName: app.packageName,
+              planId: app.planId,
+              isHundredDayPlan: true,
+              limitMinutes: limitMinutes,
+              usedMinutes: usedMinutes,
+              exp: 30,
+              status: 'newly_restricted_bonus',
+              reason: '加入 100 天计划并度过完整自然日，奖励 +30 EXP',
+              isPlanRelated: true,
+              isSystemReward: false,
+              bonusKind: _GrowthBonusKind.planJoin,
+            ),
+          );
+        }
+      } else {
+        final planStartedAt = app.growthPlanStartedAt == null
+            ? null
+            : _startOfDay(app.growthPlanStartedAt!);
+        final canUseRegularJoinWindow =
+            planStartedAt == null || date.isBefore(planStartedAt);
+        if (
+          canUseRegularJoinWindow &&
+          app.growthNormalJoinBonusAwardedAt == null &&
+          date.isAfter(appCreatedAt)
+        ) {
+          positiveEntries.add(
+            _PendingGrowthEntry(
+              appId: app.id,
+              appName: app.appName,
+              packageName: app.packageName,
+              planId: app.planId,
+              isHundredDayPlan: false,
+              limitMinutes: limitMinutes,
+              usedMinutes: usedMinutes,
+              exp: 20,
+              status: 'newly_restricted_bonus',
+              reason: '加入受控应用并度过完整自然日，奖励 +20 EXP',
+              isPlanRelated: false,
+              isSystemReward: false,
+              bonusKind: _GrowthBonusKind.normalJoin,
+            ),
+          );
+        }
+      }
+    }
+
+    final qualifiedDay = qualifiedAppsCount > 0 && !hasPlanFailure;
+    final nextStreakDays = qualifiedDay ? profile.currentStreakDays + 1 : 0;
+    final bestStreakDays = math.max(profile.bestStreakDays, nextStreakDays);
+    final streakBonusExp = _resolveStreakBonus(nextStreakDays);
+
+    if (streakBonusExp > 0) {
+      positiveEntries.add(
+        _PendingGrowthEntry(
+          appId: null,
+          appName: '成长系统',
+          packageName: 'growth.system',
+          planId: null,
+          isHundredDayPlan: false,
+          limitMinutes: 0,
+          usedMinutes: 0,
+          exp: streakBonusExp,
+          status: 'streak_bonus',
+          reason: '连续 $nextStreakDays 天达成成长日，获得连胜奖励',
+          isPlanRelated: false,
+          isSystemReward: true,
+          bonusKind: null,
+        ),
+      );
+    }
+
+    final cappedEntries = _applyGrowthDailyCap(positiveEntries);
+    final gainedExp = cappedEntries.fold<int>(0, (sum, entry) => sum + entry.exp);
+    final baseExp = cappedEntries
+        .where((entry) => !entry.isSystemReward)
+        .fold<int>(0, (sum, entry) => sum + entry.exp);
+    final finalStreakBonusExp = cappedEntries
+        .where((entry) => entry.isSystemReward)
+        .fold<int>(0, (sum, entry) => sum + entry.exp);
+    final planBonusExp = cappedEntries
+        .where((entry) => entry.isPlanRelated)
+        .fold<int>(0, (sum, entry) => sum + entry.exp);
+
+    final updatedProfile = _applyGrowthProgress(
+      profile: profile,
+      gainedExp: gainedExp,
+      currentStreakDays: nextStreakDays,
+      bestStreakDays: bestStreakDays,
+      settlementDate: businessDate,
+      updatedAt: createdAt,
+    );
+
+    final dailyLog = GrowthDailyLogModel(
+      id: 'growth-$businessDate',
+      date: businessDate,
+      gainedExp: gainedExp,
+      baseExp: baseExp,
+      streakBonusExp: finalStreakBonusExp,
+      planBonusExp: planBonusExp,
+      qualifiedAppsCount: qualifiedAppsCount,
+      failedAppsCount: failedAppsCount,
+      rankAfterSettlement: updatedProfile.currentRankIndex,
+      guardPointsAfterSettlement: updatedProfile.guardPoints,
+      createdAt: createdAt,
+    );
+
+    final appLogs = <GrowthAppLogModel>[
+      ...cappedEntries.map((entry) {
+        return GrowthAppLogModel(
+          id: _growthRepository.nextLogId(),
+          date: businessDate,
+          appId: entry.appId,
+          appName: entry.appName,
+          packageName: entry.packageName,
+          planId: entry.planId,
+          isHundredDayPlan: entry.isHundredDayPlan,
+          limitMinutes: entry.limitMinutes,
+          usedMinutes: entry.usedMinutes,
+          expGained: entry.exp,
+          status: entry.status,
+          reason: entry.reason,
+          createdAt: createdAt,
+        );
+      }),
+      ...failedEntries.map((entry) {
+        return GrowthAppLogModel(
+          id: _growthRepository.nextLogId(),
+          date: businessDate,
+          appId: entry.appId,
+          appName: entry.appName,
+          packageName: entry.packageName,
+          planId: entry.planId,
+          isHundredDayPlan: entry.isHundredDayPlan,
+          limitMinutes: entry.limitMinutes,
+          usedMinutes: entry.usedMinutes,
+          expGained: 0,
+          status: entry.status,
+          reason: entry.reason,
+          createdAt: createdAt,
+        );
+      }),
+    ];
+
+    final awardMarks = cappedEntries
+        .where((entry) => entry.bonusKind != null && entry.exp > 0 && entry.appId != null)
+        .map(
+          (entry) => _GrowthAwardMark(
+            appId: entry.appId!,
+            bonusKind: entry.bonusKind!,
+          ),
+        )
+        .toList(growable: false);
+
+    return _GrowthSettlementResult(
+      profile: updatedProfile,
+      dailyLog: dailyLog,
+      appLogs: appLogs,
+      awardMarks: awardMarks,
+    );
+  }
+
+  List<_PendingGrowthEntry> _applyGrowthDailyCap(
+    List<_PendingGrowthEntry> entries,
+  ) {
+    var remaining = GrowthRules.maxDailyExp;
+    final capped = <_PendingGrowthEntry>[];
+
+    for (final entry in entries) {
+      if (remaining <= 0) {
+        break;
+      }
+
+      final allowed = math.min(remaining, entry.exp);
+      if (allowed <= 0) {
+        continue;
+      }
+
+      capped.add(entry.copyWith(exp: allowed));
+      remaining -= allowed;
+    }
+
+    return capped;
+  }
+
+  GrowthProfileModel _applyGrowthProgress({
+    required GrowthProfileModel profile,
+    required int gainedExp,
+    required int currentStreakDays,
+    required int bestStreakDays,
+    required String settlementDate,
+    required DateTime updatedAt,
+  }) {
+    final remainingToMax = math.max(0, GrowthRules.maxTotalExp - profile.totalExp);
+    final appliedToTotal = math.min(remainingToMax, gainedExp);
+    final overflowToGuard = math.max(0, gainedExp - appliedToTotal);
+    final nextTotalExp = profile.totalExp + appliedToTotal;
+    final nextGuardPoints = profile.guardPoints + overflowToGuard;
+    final nextGuardStars = nextGuardPoints ~/ GrowthRules.guardStarExp;
+    final rank = GrowthRules.rankForExp(nextTotalExp);
+
+    return profile.copyWith(
+      totalExp: nextTotalExp,
+      currentRankIndex: rank.index,
+      currentRankName: rank.name,
+      guardPoints: nextGuardPoints,
+      guardStars: nextGuardStars,
+      currentStreakDays: currentStreakDays,
+      bestStreakDays: bestStreakDays,
+      lastSettlementDate: settlementDate,
+      updatedAt: updatedAt,
+    );
+  }
+
+  Future<void> _applyGrowthAwardMarks(List<_GrowthAwardMark> awardMarks) async {
+    for (final mark in awardMarks) {
+      if (mark.bonusKind == _GrowthBonusKind.normalJoin) {
+        await _appRepository.markGrowthNormalJoinBonusAwarded(
+          appId: mark.appId,
+          awardedAt: DateTime.now(),
+        );
+      } else if (mark.bonusKind == _GrowthBonusKind.planJoin) {
+        await _appRepository.markGrowthPlanJoinBonusAwarded(
+          appId: mark.appId,
+          awardedAt: DateTime.now(),
+        );
+      }
+    }
+  }
+
+  int _resolveStreakBonus(int streakDays) {
+    if (streakDays >= 30) {
+      return 20;
+    }
+    if (streakDays >= 14) {
+      return 15;
+    }
+    if (streakDays >= 7) {
+      return 10;
+    }
+    if (streakDays >= 3) {
+      return 5;
+    }
+    return 0;
+  }
+
+  bool _isPlanActiveOnDate({
+    required AppModel app,
+    required HundredDayPlanStatus? planStatus,
+    required DateTime date,
+  }) {
+    if (app.planId == null || planStatus == null) {
+      return false;
+    }
+
+    final planStartedAt = _startOfDay(app.growthPlanStartedAt ?? app.createdAt);
+    final planStart = _startOfDay(planStatus.startedAt ?? app.createdAt);
+    final effectiveStart = planStartedAt.isAfter(planStart) ? planStartedAt : planStart;
+    final planEnd = planStart.add(Duration(days: planStatus.durationDays));
+
+    return !date.isBefore(effectiveStart) && date.isBefore(planEnd);
   }
 
   HomeAppOverview _toHomeOverview(
@@ -1249,6 +2033,21 @@ class LocalBackendService {
     final m = date.month.toString().padLeft(2, '0');
     final d = date.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
+  }
+
+  DateTime _parseDateOnly(String value) {
+    final parts = value.split('-');
+    if (parts.length != 3) {
+      return _startOfDay(DateTime.now());
+    }
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    final day = int.tryParse(parts[2]) ?? DateTime.now().day;
+    return DateTime(year, month, day);
+  }
+
+  DateTime _startOfDay(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
   }
 
   bool _isInMonitoringSchedule(DateTime now, ScheduleSettingsModel schedule) {

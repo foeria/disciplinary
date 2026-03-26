@@ -10,6 +10,9 @@ import 'tables/usage_logs_table.dart';
 import 'tables/settings_table.dart';
 import 'tables/lock_logs_table.dart';
 import 'tables/plans_table.dart';
+import 'tables/growth_profile_table.dart';
+import 'tables/growth_daily_logs_table.dart';
+import 'tables/growth_app_logs_table.dart';
 import 'tables/whitelist_table.dart';
 import 'tables/schedules_table.dart';
 import 'tables/notification_settings_table.dart';
@@ -18,7 +21,7 @@ import 'tables/notification_settings_table.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static const int _databaseVersion = 8;
+  static const int _databaseVersion = 9;
 
   DatabaseHelper._init();
 
@@ -67,6 +70,16 @@ class DatabaseHelper {
     await db.execute(PlansTable.createSql);
     await db.execute(PlansTable.createIndexUpdatedAt);
 
+    // 成长表
+    await db.execute(GrowthProfileTable.createSql);
+    await db.execute(GrowthDailyLogsTable.createSql);
+    await db.execute(GrowthDailyLogsTable.createIndexDate);
+    await db.execute(GrowthDailyLogsTable.createIndexCreatedAt);
+    await db.execute(GrowthAppLogsTable.createSql);
+    await db.execute(GrowthAppLogsTable.createIndexDate);
+    await db.execute(GrowthAppLogsTable.createIndexCreatedAt);
+    await db.execute(GrowthAppLogsTable.createIndexPackageDate);
+
     // 白名单表
     await db.execute(WhitelistTable.createSql);
     await db.execute(WhitelistTable.createIndexPackage);
@@ -102,6 +115,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 8) {
       await _migrateToV8(db);
+    }
+    if (oldVersion < 9) {
+      await _migrateToV9(db);
     }
   }
 
@@ -294,6 +310,87 @@ class DatabaseHelper {
     }
   }
 
+  Future<void> _migrateToV9(Database db) async {
+    await db.execute(
+      GrowthProfileTable.createSql.replaceFirst(
+        'CREATE TABLE',
+        'CREATE TABLE IF NOT EXISTS',
+      ),
+    );
+    await db.execute(
+      GrowthDailyLogsTable.createSql.replaceFirst(
+        'CREATE TABLE',
+        'CREATE TABLE IF NOT EXISTS',
+      ),
+    );
+    await db.execute(
+      GrowthDailyLogsTable.createIndexDate.replaceFirst(
+        'CREATE INDEX',
+        'CREATE INDEX IF NOT EXISTS',
+      ),
+    );
+    await db.execute(
+      GrowthDailyLogsTable.createIndexCreatedAt.replaceFirst(
+        'CREATE INDEX',
+        'CREATE INDEX IF NOT EXISTS',
+      ),
+    );
+    await db.execute(
+      GrowthAppLogsTable.createSql.replaceFirst(
+        'CREATE TABLE',
+        'CREATE TABLE IF NOT EXISTS',
+      ),
+    );
+    await db.execute(
+      GrowthAppLogsTable.createIndexDate.replaceFirst(
+        'CREATE INDEX',
+        'CREATE INDEX IF NOT EXISTS',
+      ),
+    );
+    await db.execute(
+      GrowthAppLogsTable.createIndexCreatedAt.replaceFirst(
+        'CREATE INDEX',
+        'CREATE INDEX IF NOT EXISTS',
+      ),
+    );
+    await db.execute(
+      GrowthAppLogsTable.createIndexPackageDate.replaceFirst(
+        'CREATE INDEX',
+        'CREATE INDEX IF NOT EXISTS',
+      ),
+    );
+
+    await _ensureColumn(
+      db,
+      AppsTable.tableName,
+      AppsTable.columnGrowthNormalJoinBonusAwardedAt,
+      'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      AppsTable.tableName,
+      AppsTable.columnGrowthPlanStartedAt,
+      'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      AppsTable.tableName,
+      AppsTable.columnGrowthPlanJoinBonusAwardedAt,
+      'TEXT',
+    );
+
+    await db.execute(
+      '''
+      UPDATE ${AppsTable.tableName}
+      SET ${AppsTable.columnGrowthPlanStartedAt} = COALESCE(${AppsTable.columnGrowthPlanStartedAt}, ${AppsTable.columnCreatedAt})
+      WHERE ${AppsTable.columnPlanId} IS NOT NULL
+        AND ${AppsTable.columnPlanId} != ''
+      ''',
+    );
+
+    await _ensureDefaultRows(db);
+  }
+
   Future<void> _ensureColumn(
     Database db,
     String tableName,
@@ -316,6 +413,11 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_questions_type ON questions (type)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_lock_logs_app ON lock_logs (app_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_lock_logs_locked_at ON lock_logs (locked_at)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_growth_daily_logs_date ON growth_daily_logs (date)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_growth_daily_logs_created_at ON growth_daily_logs (created_at)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_growth_app_logs_date ON growth_app_logs (date)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_growth_app_logs_created_at ON growth_app_logs (created_at)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_growth_app_logs_package_date ON growth_app_logs (package_name, date)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_whitelist_package ON whitelist (package_name)');
   }
 

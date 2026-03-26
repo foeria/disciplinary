@@ -97,6 +97,9 @@ class AppRepository {
       isHundredDayPlan: planId != null || isHundredDayPlan,
       planId: planId,
       installedAt: installedAt,
+      growthNormalJoinBonusAwardedAt: null,
+      growthPlanStartedAt: planId == null ? null : now,
+      growthPlanJoinBonusAwardedAt: null,
       unlockLimitOverrideMinutes: null,
       unlockLimitOverrideDate: null,
       createdAt: now,
@@ -206,11 +209,52 @@ class AppRepository {
     required String appId,
     required String? planId,
   }) async {
+    final existing = await getAppById(appId);
+    final now = DateTime.now();
+    final isEnteringPlan = planId != null && planId.isNotEmpty;
+    final shouldResetPlanWindow =
+        isEnteringPlan && existing?.planId != planId;
     await _databaseHelper.update(
       AppsTable.tableName,
       {
         AppsTable.columnPlanId: planId,
         AppsTable.columnIsHundredDayPlan: planId == null ? 0 : 1,
+        if (shouldResetPlanWindow)
+          AppsTable.columnGrowthPlanStartedAt: now.toIso8601String(),
+        if (shouldResetPlanWindow)
+          AppsTable.columnGrowthPlanJoinBonusAwardedAt: null,
+        AppsTable.columnUpdatedAt: now.toIso8601String(),
+      },
+      where: '${AppsTable.columnId} = ?',
+      whereArgs: [appId],
+    );
+  }
+
+  Future<void> markGrowthNormalJoinBonusAwarded({
+    required String appId,
+    required DateTime awardedAt,
+  }) async {
+    await _databaseHelper.update(
+      AppsTable.tableName,
+      {
+        AppsTable.columnGrowthNormalJoinBonusAwardedAt:
+            awardedAt.toIso8601String(),
+        AppsTable.columnUpdatedAt: DateTime.now().toIso8601String(),
+      },
+      where: '${AppsTable.columnId} = ?',
+      whereArgs: [appId],
+    );
+  }
+
+  Future<void> markGrowthPlanJoinBonusAwarded({
+    required String appId,
+    required DateTime awardedAt,
+  }) async {
+    await _databaseHelper.update(
+      AppsTable.tableName,
+      {
+        AppsTable.columnGrowthPlanJoinBonusAwardedAt:
+            awardedAt.toIso8601String(),
         AppsTable.columnUpdatedAt: DateTime.now().toIso8601String(),
       },
       where: '${AppsTable.columnId} = ?',

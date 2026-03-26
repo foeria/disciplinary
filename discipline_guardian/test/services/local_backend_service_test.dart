@@ -1,8 +1,13 @@
 import 'package:discipline_guardian/data/models/app_model.dart';
+import 'package:discipline_guardian/data/models/growth_app_log_model.dart';
+import 'package:discipline_guardian/data/models/growth_daily_log_model.dart';
+import 'package:discipline_guardian/data/models/growth_profile_model.dart';
+import 'package:discipline_guardian/data/models/lock_log_model.dart';
 import 'package:discipline_guardian/data/models/plan_model.dart';
 import 'package:discipline_guardian/data/models/schedule_settings_model.dart';
 import 'package:discipline_guardian/data/models/usage_log_model.dart';
 import 'package:discipline_guardian/data/repositories/app_repository.dart';
+import 'package:discipline_guardian/data/repositories/growth_repository.dart';
 import 'package:discipline_guardian/data/repositories/lock_log_repository.dart';
 import 'package:discipline_guardian/data/repositories/plan_repository.dart';
 import 'package:discipline_guardian/data/repositories/settings_repository.dart';
@@ -104,6 +109,47 @@ class _FakeUsageLogRepository extends UsageLogRepository {
     }
     logs.add(log);
   }
+
+  @override
+  Future<UsageLogModel?> getLogByAppAndDate({
+    required String appId,
+    required String date,
+  }) async {
+    for (final log in logs) {
+      if (log.appId == appId && log.date == date) {
+        return log;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<List<UsageLogModel>> getLogsByDate(String date) async {
+    return logs.where((log) => log.date == date).toList(growable: false);
+  }
+
+  @override
+  Future<void> incrementUnlockCount({
+    required String appId,
+    required String date,
+    required int usedMinutes,
+  }) async {
+    final existing = await getLogByAppAndDate(appId: appId, date: date);
+    await saveDailyUsage(
+      (existing ??
+              UsageLogModel(
+                id: '${appId}_$date',
+                appId: appId,
+                date: date,
+                usedMinutes: usedMinutes,
+                unlockCount: 0,
+              ))
+          .copyWith(
+        usedMinutes: usedMinutes,
+        unlockCount: (existing?.unlockCount ?? 0) + 1,
+      ),
+    );
+  }
 }
 
 class _FakeLockLogRepository extends LockLogRepository {
@@ -114,6 +160,52 @@ class _FakeLockLogRepository extends LockLogRepository {
 
   final Map<String, int> summary;
   final int averageUnlockMinutes;
+  final List<LockLogModel> lockLogs = <LockLogModel>[];
+
+  @override
+  Future<LockLogModel> createLockLog({
+    required String appId,
+    required String unlockMethod,
+  }) async {
+    final model = LockLogModel(
+      id: 'lock-${lockLogs.length + 1}',
+      appId: appId,
+      lockedAt: DateTime.now(),
+      unlockMethod: unlockMethod,
+      isCompleted: false,
+    );
+    lockLogs.add(model);
+    return model;
+  }
+
+  @override
+  Future<void> markUnlockCompleted({
+    required String logId,
+  }) async {
+    final index = lockLogs.indexWhere((log) => log.id == logId);
+    if (index == -1) {
+      return;
+    }
+    final existing = lockLogs[index];
+    lockLogs[index] = LockLogModel(
+      id: existing.id,
+      appId: existing.appId,
+      lockedAt: existing.lockedAt,
+      unlockedAt: DateTime.now(),
+      unlockMethod: existing.unlockMethod,
+      isCompleted: true,
+    );
+  }
+
+  @override
+  Future<LockLogModel?> getLatestIncompleteLogByAppId(String appId) async {
+    for (final log in lockLogs.reversed) {
+      if (log.appId == appId && !log.isCompleted) {
+        return log;
+      }
+    }
+    return null;
+  }
 
   @override
   Future<Map<String, int>> getSummaryByLockedDateRange({
@@ -132,6 +224,73 @@ class _FakeLockLogRepository extends LockLogRepository {
   }
 }
 
+class _FakeGrowthRepository extends GrowthRepository {
+  GrowthProfileModel? profile;
+  final List<GrowthDailyLogModel> dailyLogs = <GrowthDailyLogModel>[];
+  final List<GrowthAppLogModel> appLogs = <GrowthAppLogModel>[];
+  int _nextId = 0;
+
+  @override
+  Future<GrowthProfileModel> ensureProfile({
+    required String initialRankName,
+  }) async {
+    profile ??= GrowthProfileModel(
+      id: 'primary',
+      totalExp: 0,
+      currentRankIndex: 1,
+      currentRankName: initialRankName,
+      guardPoints: 0,
+      guardStars: 0,
+      currentStreakDays: 0,
+      bestStreakDays: 0,
+      lastSettlementDate: null,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    return profile!;
+  }
+
+  @override
+  Future<void> saveProfile(GrowthProfileModel model) async {
+    profile = model;
+  }
+
+  @override
+  Future<List<GrowthDailyLogModel>> getDailyLogsCreatedOn(String date) async {
+    return dailyLogs
+        .where((log) => _formatDate(log.createdAt) == date)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<GrowthAppLogModel>> getAppLogsCreatedOn(String date) async {
+    return appLogs
+        .where((log) => _formatDate(log.createdAt) == date)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> saveDailyLog(GrowthDailyLogModel model) async {
+    dailyLogs.removeWhere((log) => log.date == model.date);
+    dailyLogs.add(model);
+  }
+
+  @override
+  Future<void> replaceAppLogsForDate({
+    required String date,
+    required List<GrowthAppLogModel> logs,
+  }) async {
+    appLogs.removeWhere((log) => log.date == date);
+    appLogs.addAll(logs);
+  }
+
+  @override
+  String nextLogId() {
+    _nextId += 1;
+    return 'growth-log-$_nextId';
+  }
+}
+
 class _FakeSettingsRepository extends SettingsRepository {
   _FakeSettingsRepository({
     required this.schedule,
@@ -144,6 +303,15 @@ class _FakeSettingsRepository extends SettingsRepository {
 
   @override
   Future<ScheduleSettingsModel> getScheduleSettings() async => schedule;
+
+  @override
+  Future<String> getUnlockMethod() async => 'question';
+
+  @override
+  Future<int> getUnlockQuestionCount() async => 3;
+
+  @override
+  Future<int> getUnlockExtensionMinutes() async => 15;
 }
 
 class _FakePlanRepository extends PlanRepository {
@@ -226,6 +394,7 @@ void main() {
           ),
         ]),
         planRepository: _FakePlanRepository(const <PlanModel>[]),
+        growthRepository: _FakeGrowthRepository(),
       );
 
       final data = await service.getHomeDashboardData();
@@ -244,6 +413,7 @@ void main() {
       final service = LocalBackendService(
         appRepository: _FakeAppRepository(const []),
         planRepository: _FakePlanRepository(const <PlanModel>[]),
+        growthRepository: _FakeGrowthRepository(),
         usageLogRepository: _FakeUsageLogRepository(
           logs: [
             UsageLogModel(
@@ -320,6 +490,11 @@ void main() {
       final service = LocalBackendService(
         appRepository: appRepository,
         planRepository: _FakePlanRepository(const <PlanModel>[]),
+        growthRepository: _FakeGrowthRepository(),
+        lockLogRepository: _FakeLockLogRepository(
+          summary: const {},
+          averageUnlockMinutes: 0,
+        ),
         settingsRepository: _FakeSettingsRepository(
           schedule: ScheduleSettingsModel(
             id: 'default',
@@ -376,6 +551,11 @@ void main() {
       final service = LocalBackendService(
         appRepository: _FakeAppRepository(apps),
         planRepository: _FakePlanRepository([plan]),
+        growthRepository: _FakeGrowthRepository(),
+        lockLogRepository: _FakeLockLogRepository(
+          summary: const {},
+          averageUnlockMinutes: 0,
+        ),
         settingsRepository: _FakeSettingsRepository(
           schedule: ScheduleSettingsModel(
             id: 'default',

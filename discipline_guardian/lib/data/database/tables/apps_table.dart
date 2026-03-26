@@ -9,6 +9,9 @@
 ///   used_minutes_today   INTEGER DEFAULT 0  — 今日已用时间（分钟），每日重置
 ///   is_monitored         INTEGER DEFAULT 1  — 是否处于监控中 (1=是 0=否)
 ///   is_locked            INTEGER DEFAULT 0  — 当前是否被锁定 (1=是 0=否)
+///   growth_normal_join_bonus_awarded_at TEXT — 普通受控加入奖励发放时间
+///   growth_plan_started_at TEXT             — 加入 100 天计划时间
+///   growth_plan_join_bonus_awarded_at TEXT  — 计划加入奖励发放时间
 ///   unlock_limit_override_minutes INTEGER   — 当日解锁后临时放宽的分钟上限
 ///   unlock_limit_override_date    TEXT      — 临时上限生效日期 yyyy-MM-dd
 ///   created_at           TEXT               — 创建时间 ISO-8601
@@ -27,6 +30,11 @@ class AppsTable {
   static const String columnIsHundredDayPlan = 'is_hundred_day_plan';
   static const String columnPlanId = 'plan_id';
   static const String columnInstalledAt = 'installed_at';
+  static const String columnGrowthNormalJoinBonusAwardedAt =
+      'growth_normal_join_bonus_awarded_at';
+  static const String columnGrowthPlanStartedAt = 'growth_plan_started_at';
+  static const String columnGrowthPlanJoinBonusAwardedAt =
+      'growth_plan_join_bonus_awarded_at';
   static const String columnUnlockLimitOverrideMinutes =
       'unlock_limit_override_minutes';
   static const String columnUnlockLimitOverrideDate =
@@ -47,6 +55,9 @@ class AppsTable {
       $columnIsHundredDayPlan INTEGER NOT NULL DEFAULT 0,
       $columnPlanId TEXT,
       $columnInstalledAt TEXT,
+      $columnGrowthNormalJoinBonusAwardedAt TEXT,
+      $columnGrowthPlanStartedAt TEXT,
+      $columnGrowthPlanJoinBonusAwardedAt TEXT,
       $columnUnlockLimitOverrideMinutes INTEGER,
       $columnUnlockLimitOverrideDate TEXT,
       $columnCreatedAt TEXT NOT NULL,

@@ -20,6 +20,32 @@ class UsageLogRepository {
     );
   }
 
+  Future<UsageLogModel?> getLogByAppAndDate({
+    required String appId,
+    required String date,
+  }) async {
+    final rows = await _databaseHelper.queryByCondition(
+      UsageLogsTable.tableName,
+      where:
+          '${UsageLogsTable.columnAppId} = ? AND ${UsageLogsTable.columnDate} = ?',
+      whereArgs: [appId, date],
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return UsageLogModel.fromMap(rows.first);
+  }
+
+  Future<List<UsageLogModel>> getLogsByDate(String date) async {
+    final rows = await _databaseHelper.queryByCondition(
+      UsageLogsTable.tableName,
+      where: '${UsageLogsTable.columnDate} = ?',
+      whereArgs: [date],
+      orderBy: '${UsageLogsTable.columnAppId} ASC',
+    );
+    return rows.map(UsageLogModel.fromMap).toList(growable: false);
+  }
+
   Future<List<UsageLogModel>> getLogsByDateRange({
     required String startDate,
     required String endDate,
@@ -61,6 +87,28 @@ class UsageLogRepository {
       LIMIT ?
       ''',
       [startDate, endDate, limit],
+    );
+  }
+
+  Future<void> incrementUnlockCount({
+    required String appId,
+    required String date,
+    required int usedMinutes,
+  }) async {
+    final existing = await getLogByAppAndDate(appId: appId, date: date);
+    await saveDailyUsage(
+      (existing ??
+              UsageLogModel(
+                id: '${appId}_$date',
+                appId: appId,
+                date: date,
+                usedMinutes: usedMinutes,
+                unlockCount: 0,
+              ))
+          .copyWith(
+        usedMinutes: usedMinutes,
+        unlockCount: (existing?.unlockCount ?? 0) + 1,
+      ),
     );
   }
 }
