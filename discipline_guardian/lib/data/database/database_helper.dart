@@ -9,6 +9,7 @@ import 'tables/questions_table.dart';
 import 'tables/usage_logs_table.dart';
 import 'tables/settings_table.dart';
 import 'tables/lock_logs_table.dart';
+import 'tables/plans_table.dart';
 import 'tables/whitelist_table.dart';
 import 'tables/schedules_table.dart';
 import 'tables/notification_settings_table.dart';
@@ -17,7 +18,7 @@ import 'tables/notification_settings_table.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 8;
 
   DatabaseHelper._init();
 
@@ -62,6 +63,10 @@ class DatabaseHelper {
     await db.execute(LockLogsTable.createIndexApp);
     await db.execute(LockLogsTable.createIndexLockedAt);
 
+    // 计划表
+    await db.execute(PlansTable.createSql);
+    await db.execute(PlansTable.createIndexUpdatedAt);
+
     // 白名单表
     await db.execute(WhitelistTable.createSql);
     await db.execute(WhitelistTable.createIndexPackage);
@@ -91,6 +96,12 @@ class DatabaseHelper {
     }
     if (oldVersion < 6) {
       await _migrateToV6(db);
+    }
+    if (oldVersion < 7) {
+      await _migrateToV7(db);
+    }
+    if (oldVersion < 8) {
+      await _migrateToV8(db);
     }
   }
 
@@ -200,6 +211,87 @@ class DatabaseHelper {
 
   Future<void> _migrateToV6(Database db) async {
     await _seedPresetQuestions(db);
+  }
+
+  Future<void> _migrateToV7(Database db) async {
+    await _ensureColumn(
+      db,
+      AppsTable.tableName,
+      AppsTable.columnIsHundredDayPlan,
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db,
+      AppsTable.tableName,
+      AppsTable.columnInstalledAt,
+      'TEXT',
+    );
+    await _ensureDefaultRows(db);
+  }
+
+  Future<void> _migrateToV8(Database db) async {
+    await db.execute(
+      PlansTable.createSql.replaceFirst('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS'),
+    );
+    await db.execute(
+      PlansTable.createIndexUpdatedAt.replaceFirst('CREATE INDEX', 'CREATE INDEX IF NOT EXISTS'),
+    );
+    await _ensureColumn(
+      db,
+      AppsTable.tableName,
+      AppsTable.columnPlanId,
+      'TEXT',
+    );
+
+    final legacyPlanApps = await db.query(
+      AppsTable.tableName,
+      where: '${AppsTable.columnIsHundredDayPlan} = ?',
+      whereArgs: [1],
+    );
+
+    if (legacyPlanApps.isNotEmpty) {
+      const legacyPlanId = 'legacy-hundred-day-plan';
+      final existingPlan = await db.query(
+        PlansTable.tableName,
+        where: '${PlansTable.columnId} = ?',
+        whereArgs: [legacyPlanId],
+      );
+      if (existingPlan.isEmpty) {
+        final settings = await db.query(
+          SettingsTable.tableName,
+          where: '${SettingsTable.columnKey} = ?',
+          whereArgs: [SettingsTable.keyHundredDayPlanStartDate],
+        );
+        final startDateRaw = settings.isEmpty
+            ? null
+            : settings.first[SettingsTable.columnValue] as String?;
+        final now = DateTime.now();
+        final startDate = DateTime.tryParse(startDateRaw ?? '') ?? now;
+        await db.insert(
+          PlansTable.tableName,
+          {
+            PlansTable.columnId: legacyPlanId,
+            PlansTable.columnName: '自律100天',
+            PlansTable.columnDurationDays: 100,
+            PlansTable.columnStartDate: startDate.toIso8601String(),
+            PlansTable.columnCreatedAt: now.toIso8601String(),
+            PlansTable.columnUpdatedAt: now.toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+
+      await db.update(
+        AppsTable.tableName,
+        {
+          AppsTable.columnPlanId: legacyPlanId,
+          AppsTable.columnUpdatedAt: DateTime.now().toIso8601String(),
+        },
+        where:
+            '${AppsTable.columnIsHundredDayPlan} = ? AND (${AppsTable.columnPlanId} IS NULL OR ${AppsTable.columnPlanId} = ?)',
+        whereArgs: [1, ''],
+      );
+    }
   }
 
   Future<void> _ensureColumn(

@@ -195,6 +195,7 @@ class _MainNavigatorState extends State<MainNavigator>
     ) {
       unawaited(_handlePromptSignal(packageName));
     });
+    unawaited(_syncPermissionReminderNotifications());
     _runMonitorCycle();
     _monitorTimer = Timer.periodic(
       const Duration(seconds: 2),
@@ -213,6 +214,7 @@ class _MainNavigatorState extends State<MainNavigator>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(_syncPermissionReminderNotifications());
       _runMonitorCycle();
     }
   }
@@ -227,6 +229,14 @@ class _MainNavigatorState extends State<MainNavigator>
       AppEvents.notifyStatsRefresh();
     }
     _runMonitorCycle();
+  }
+
+  Future<void> _syncPermissionReminderNotifications() async {
+    try {
+      await _backendService.syncSystemPermissionReminderNotifications();
+    } catch (_) {
+      // Keep the main flow available even if native reminder sync fails.
+    }
   }
 
   Future<void> _handlePromptSignal(String packageName) async {
@@ -355,43 +365,62 @@ class _MainNavigatorState extends State<MainNavigator>
       return;
     }
 
+    final navigator = Navigator.of(context);
+    final effectiveLimitMinutes =
+        await _backendService.getEffectiveLimitMinutesForApp(app);
+    final requiredQuestionCount =
+        await _backendService.getRequiredUnlockQuestionCountForApp(app);
+    final activePlanStatus = await _backendService.getActivePlanStatusForApp(app);
+    final isHundredDayPlanApp = activePlanStatus != null;
+    if (!navigator.mounted) {
+      return;
+    }
+
     _isAutoLockVisible = true;
-    await Navigator.of(context).push(
+    await navigator.push(
       MaterialPageRoute(
         builder: (_) => LockScreen(
           appName: app.appName,
           usedMinutes: app.usedMinutesToday,
-          limitMinutes: app.dailyLimitMinutes,
+          limitMinutes: effectiveLimitMinutes,
           unlockMethod: UnlockMethod.question,
+          overrideQuestionCount: requiredQuestionCount,
           onUnlockSuccess: () async {
             await _backendService.unlockApp(app.id);
-            final nextQuestionCount =
-                await _backendService.incrementUnlockQuestionCountAfterSuccess();
+            final nextQuestionCount = isHundredDayPlanApp
+                ? 100
+                : await _backendService.incrementUnlockQuestionCountAfterSuccess();
             await _backendService.syncNativeInterceptionRules();
             _unlockCooldownByPackage[app.packageName] =
                 DateTime.now().add(_unlockCooldownWindow);
             if (!mounted) {
               return;
             }
+            final dialogContext = navigator.context;
+            if (!dialogContext.mounted) {
+              return;
+            }
             await showDialog<void>(
-              context: context,
-              builder: (dialogContext) => AlertDialog(
+              context: dialogContext,
+              builder: (alertDialogContext) => AlertDialog(
                 title: const Text('解锁成功'),
                 content: Text(
-                  '已允许继续使用 ${app.appName}。\n根据当前解锁曲线，下次需要完成 $nextQuestionCount 题。',
+                  isHundredDayPlanApp
+                      ? '已允许继续使用 ${app.appName}。\n${activePlanStatus.planName} 仍在进行中，下次解锁仍需完成 100 题。'
+                      : '已允许继续使用 ${app.appName}。\n根据当前解锁曲线，下次需要完成 $nextQuestionCount 题。',
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
+                    onPressed: () => Navigator.pop(alertDialogContext),
                     child: const Text('知道了'),
                   ),
                 ],
               ),
             );
-            if (!mounted) {
+            if (!mounted || !navigator.mounted) {
               return;
             }
-            Navigator.of(context).pop();
+            navigator.pop();
             await Future<void>.delayed(const Duration(milliseconds: 120));
             final launched =
                 await _backendService.launchAppByPackage(app.packageName);

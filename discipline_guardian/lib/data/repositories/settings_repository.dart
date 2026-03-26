@@ -167,6 +167,39 @@ class SettingsRepository {
     );
   }
 
+  Future<bool> getHundredDayPlanEnabled() async {
+    final raw = await _getSettingValue(
+      key: SettingsTable.keyHundredDayPlanEnabled,
+      fallbackValue: '0',
+    );
+    return raw == '1';
+  }
+
+  Future<void> setHundredDayPlanEnabled(bool value) async {
+    await _upsertSettingValue(
+      SettingsTable.keyHundredDayPlanEnabled,
+      value ? '1' : '0',
+    );
+  }
+
+  Future<DateTime?> getHundredDayPlanStartDate() async {
+    final raw = await _getSettingValue(
+      key: SettingsTable.keyHundredDayPlanStartDate,
+      fallbackValue: '',
+    );
+    if (raw.trim().isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(raw);
+  }
+
+  Future<void> setHundredDayPlanStartDate(DateTime? value) async {
+    await _upsertSettingValue(
+      SettingsTable.keyHundredDayPlanStartDate,
+      value?.toIso8601String() ?? '',
+    );
+  }
+
   Future<bool> getWhitelistEnabled() async {
     final raw = await _getSettingValue(
       key: SettingsTable.keyWhitelistEnabled,

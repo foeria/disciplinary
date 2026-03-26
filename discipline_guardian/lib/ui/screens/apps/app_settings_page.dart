@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+
 import '../../widgets/anime_button.dart';
 import '../../widgets/anime_card.dart';
 import '../../widgets/progress_ring.dart';
 
-/// 应用设置页面
 class AppSettingsPage extends StatefulWidget {
   final String appName;
   final String packageName;
+  final String? planName;
   final IconData icon;
   final Color iconColor;
   final int usedMinutes;
   final int limitMinutes;
+  final bool isHundredDayPlan;
   final bool isLocked;
   final Future<void> Function(int) onLimitChanged;
   final Future<void> Function() onUnlock;
@@ -20,10 +22,12 @@ class AppSettingsPage extends StatefulWidget {
     super.key,
     required this.appName,
     required this.packageName,
+    this.planName,
     required this.icon,
     required this.iconColor,
     required this.usedMinutes,
     required this.limitMinutes,
+    this.isHundredDayPlan = false,
     required this.isLocked,
     required this.onLimitChanged,
     required this.onUnlock,
@@ -48,7 +52,8 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
     final mins = minutes % 60;
     if (hours > 0 && mins > 0) {
       return '${hours}h ${mins}m';
-    } else if (hours > 0) {
+    }
+    if (hours > 0) {
       return '${hours}h';
     }
     return '${mins}m';
@@ -76,7 +81,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Color(0xFFE53935)),
-            onPressed: () => _showDeleteDialog(),
+            onPressed: _showDeleteDialog,
           ),
         ],
       ),
@@ -86,16 +91,12 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 应用信息
               _buildAppInfo(),
               const SizedBox(height: 24),
-              // 使用进度
               _buildUsageProgress(),
               const SizedBox(height: 24),
-              // 限制设置
               _buildLimitSetting(),
               const SizedBox(height: 24),
-              // 操作按钮
               _buildActions(),
             ],
           ),
@@ -131,6 +132,39 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                     color: Color(0xFF333333),
                   ),
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.packageName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                if (widget.isHundredDayPlan) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7E57C2).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      widget.planName == null || widget.planName!.trim().isEmpty
+                          ? '计划中'
+                          : '所属计划：${widget.planName}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF7E57C2),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -149,7 +183,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                '今日使用',
+                '今日使用情况',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -158,7 +192,10 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
               ),
               if (widget.isLocked)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE53935).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -188,13 +225,45 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
   }
 
   Widget _buildLimitSetting() {
+    if (widget.isHundredDayPlan) {
+      final planName =
+          widget.planName == null || widget.planName!.trim().isEmpty
+              ? '当前计划'
+              : widget.planName!;
+      return AnimeCard(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '计划规则',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF333333),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$planName 中的应用按计划单独计算，不使用普通模式的限额。计划生效期间，每天仅可使用 30 分钟；若要解锁、移出计划或调整计划内容，需要完成 100 道题。',
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.5,
+                color: Color(0xFF666666),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return AnimeCard(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '每日限制',
+            '每日限额',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -270,14 +339,14 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
           SizedBox(
             width: double.infinity,
             child: AnimeButton(
-              text: '保存设置',
+              text: '保存限额',
               onPressed: () async {
                 await widget.onLimitChanged(_limitMinutes);
                 if (!mounted) {
                   return;
                 }
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('设置已保存')),
+                  const SnackBar(content: Text('限额已更新')),
                 );
               },
             ),
@@ -294,20 +363,20 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
           SizedBox(
             width: double.infinity,
             child: AnimeButton(
-              text: '手动解锁',
+              text: '立即解锁',
               gradientColors: const [Color(0xFF43A047), Color(0xFF66BB6A)],
               icon: Icons.lock_open_outlined,
               onPressed: () async => widget.onUnlock(),
             ),
           ),
-        const SizedBox(height: 12),
+        if (widget.isLocked) const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: AnimeOutlinedButton(
-            text: '删除监控',
+            text: '移除受控应用',
             borderColor: const Color(0xFFE53935),
             textColor: const Color(0xFFE53935),
-            onPressed: () => _showDeleteDialog(),
+            onPressed: _showDeleteDialog,
           ),
         ),
       ],
@@ -317,21 +386,21 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
   void _showDeleteDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除确认'),
-        content: Text('确定要删除 ${widget.appName} 的监控吗？'),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('确认移除'),
+        content: Text('确认将 ${widget.appName} 从受控应用中移除吗？'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('取消'),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               await widget.onDelete();
             },
             child: const Text(
-              '删除',
+              '移除',
               style: TextStyle(color: Color(0xFFE53935)),
             ),
           ),

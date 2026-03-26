@@ -33,6 +33,28 @@ class AppRepository {
     return rows.map(AppModel.fromMap).toList(growable: false);
   }
 
+  Future<List<AppModel>> getHundredDayPlanApps() async {
+    final rows = await _databaseHelper.queryByCondition(
+      AppsTable.tableName,
+      where:
+          '${AppsTable.columnIsMonitored} = ? AND ${AppsTable.columnIsHundredDayPlan} = ?',
+      whereArgs: [1, 1],
+      orderBy: '${AppsTable.columnUpdatedAt} DESC',
+    );
+    return rows.map(AppModel.fromMap).toList(growable: false);
+  }
+
+  Future<List<AppModel>> getAppsByPlanId(String planId) async {
+    final rows = await _databaseHelper.queryByCondition(
+      AppsTable.tableName,
+      where:
+          '${AppsTable.columnIsMonitored} = ? AND ${AppsTable.columnPlanId} = ?',
+      whereArgs: [1, planId],
+      orderBy: '${AppsTable.columnUpdatedAt} DESC',
+    );
+    return rows.map(AppModel.fromMap).toList(growable: false);
+  }
+
   Future<AppModel?> getAppById(String id) async {
     final row = await _databaseHelper.queryById(AppsTable.tableName, id);
     if (row == null) {
@@ -58,6 +80,9 @@ class AppRepository {
     required String packageName,
     String? iconPath,
     required int dailyLimitMinutes,
+    DateTime? installedAt,
+    String? planId,
+    bool isHundredDayPlan = false,
   }) async {
     final now = DateTime.now();
     final app = AppModel(
@@ -69,6 +94,9 @@ class AppRepository {
       usedMinutesToday: 0,
       isMonitored: true,
       isLocked: false,
+      isHundredDayPlan: planId != null || isHundredDayPlan,
+      planId: planId,
+      installedAt: installedAt,
       unlockLimitOverrideMinutes: null,
       unlockLimitOverrideDate: null,
       createdAt: now,
@@ -139,6 +167,52 @@ class AppRepository {
     await _databaseHelper.update(
       AppsTable.tableName,
       data,
+      where: '${AppsTable.columnId} = ?',
+      whereArgs: [appId],
+    );
+  }
+
+  Future<void> updateInstalledAt({
+    required String appId,
+    required DateTime installedAt,
+  }) async {
+    await _databaseHelper.update(
+      AppsTable.tableName,
+      {
+        AppsTable.columnInstalledAt: installedAt.toIso8601String(),
+        AppsTable.columnUpdatedAt: DateTime.now().toIso8601String(),
+      },
+      where: '${AppsTable.columnId} = ?',
+      whereArgs: [appId],
+    );
+  }
+
+  Future<void> setHundredDayPlanMembership({
+    required String appId,
+    required bool enabled,
+  }) async {
+    await _databaseHelper.update(
+      AppsTable.tableName,
+      {
+        AppsTable.columnIsHundredDayPlan: enabled ? 1 : 0,
+        AppsTable.columnUpdatedAt: DateTime.now().toIso8601String(),
+      },
+      where: '${AppsTable.columnId} = ?',
+      whereArgs: [appId],
+    );
+  }
+
+  Future<void> setPlanMembership({
+    required String appId,
+    required String? planId,
+  }) async {
+    await _databaseHelper.update(
+      AppsTable.tableName,
+      {
+        AppsTable.columnPlanId: planId,
+        AppsTable.columnIsHundredDayPlan: planId == null ? 0 : 1,
+        AppsTable.columnUpdatedAt: DateTime.now().toIso8601String(),
+      },
       where: '${AppsTable.columnId} = ?',
       whereArgs: [appId],
     );

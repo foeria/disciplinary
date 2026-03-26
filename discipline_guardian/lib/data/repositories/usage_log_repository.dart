@@ -45,6 +45,8 @@ class UsageLogRepository {
         a.id AS app_id,
         a.app_name AS app_name,
         a.package_name AS package_name,
+        a.installed_at AS installed_at,
+        a.is_hundred_day_plan AS is_hundred_day_plan,
         COALESCE(SUM(u.used_minutes), 0) AS total_used_minutes,
         COALESCE(SUM(u.open_count), 0) AS total_open_count,
         COALESCE(SUM(u.unlock_count), 0) AS total_unlock_count
@@ -54,7 +56,7 @@ class UsageLogRepository {
         AND u.date >= ?
         AND u.date <= ?
       WHERE a.is_monitored = 1
-      GROUP BY a.id, a.app_name, a.package_name
+      GROUP BY a.id, a.app_name, a.package_name, a.installed_at, a.is_hundred_day_plan
       ORDER BY total_used_minutes DESC
       LIMIT ?
       ''',

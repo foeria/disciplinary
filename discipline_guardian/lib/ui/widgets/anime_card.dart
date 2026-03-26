@@ -31,11 +31,15 @@ class AnimeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = this.borderColor ?? AppTheme.primaryColor;
+    final colorScheme = Theme.of(context).colorScheme;
+    final resolvedBackgroundColor = backgroundColor == Colors.white
+        ? colorScheme.surface
+        : backgroundColor;
+    final borderColor = this.borderColor ?? colorScheme.primary;
     return Container(
       margin: margin,
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: resolvedBackgroundColor,
         borderRadius: BorderRadius.circular(borderRadius),
         border: showBorder
             ? Border.all(
@@ -110,7 +114,7 @@ class AnimeGradientCard extends StatelessWidget {
       child: Container(
         margin: EdgeInsets.all(borderWidth),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(borderRadius - borderWidth),
         ),
         child: Material(
@@ -150,7 +154,8 @@ class AnimeIconCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = this.iconColor ?? AppTheme.primaryColor;
+    final colorScheme = Theme.of(context).colorScheme;
+    final iconColor = this.iconColor ?? colorScheme.primary;
     return AnimeCard(
       onTap: onTap,
       backgroundColor: backgroundColor,
@@ -176,10 +181,10 @@ class AnimeIconCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF333333),
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 if (subtitle != null) ...[
@@ -188,7 +193,7 @@ class AnimeIconCard extends StatelessWidget {
                     subtitle!,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey.shade600,
+                      color: colorScheme.onSurface.withValues(alpha: 0.72),
                     ),
                   ),
                 ],
@@ -197,7 +202,7 @@ class AnimeIconCard extends StatelessWidget {
           ),
           Icon(
             Icons.chevron_right,
-            color: Colors.grey.shade400,
+            color: colorScheme.onSurface.withValues(alpha: 0.4),
           ),
         ],
       ),

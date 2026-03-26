@@ -480,6 +480,16 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
                           color: Color(0xFF333333),
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        app.installedDays > 0
+                            ? '加入手机 ${app.installedDays} 天'
+                            : '加入手机时间待同步',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),

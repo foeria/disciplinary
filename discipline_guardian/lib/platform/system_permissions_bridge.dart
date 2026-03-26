@@ -129,4 +129,18 @@ class SystemPermissionsBridge {
     }
     await _channel.invokeMethod<void>('stopKeepAliveService');
   }
+
+  Future<void> syncPermissionReminderNotifications(
+    List<Map<String, String>> reminders,
+  ) async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    await _channel.invokeMethod<void>(
+      'syncPermissionReminderNotifications',
+      <String, Object>{
+        'reminders': reminders,
+      },
+    );
+  }
 }

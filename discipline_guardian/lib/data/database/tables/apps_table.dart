@@ -24,6 +24,9 @@ class AppsTable {
   static const String columnUsedMinutesToday = 'used_minutes_today';
   static const String columnIsMonitored = 'is_monitored';
   static const String columnIsLocked = 'is_locked';
+  static const String columnIsHundredDayPlan = 'is_hundred_day_plan';
+  static const String columnPlanId = 'plan_id';
+  static const String columnInstalledAt = 'installed_at';
   static const String columnUnlockLimitOverrideMinutes =
       'unlock_limit_override_minutes';
   static const String columnUnlockLimitOverrideDate =
@@ -41,6 +44,9 @@ class AppsTable {
       $columnUsedMinutesToday INTEGER NOT NULL DEFAULT 0,
       $columnIsMonitored INTEGER NOT NULL DEFAULT 1,
       $columnIsLocked INTEGER NOT NULL DEFAULT 0,
+      $columnIsHundredDayPlan INTEGER NOT NULL DEFAULT 0,
+      $columnPlanId TEXT,
+      $columnInstalledAt TEXT,
       $columnUnlockLimitOverrideMinutes INTEGER,
       $columnUnlockLimitOverrideDate TEXT,
       $columnCreatedAt TEXT NOT NULL,

@@ -1,6 +1,9 @@
 package com.discipline.discipline_guardian
 
 import android.app.AppOpsManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.app.usage.UsageEvents
@@ -12,6 +15,8 @@ import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import java.util.Calendar
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -19,7 +24,14 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 	companion object {
 		const val EXTRA_PROMPT_PACKAGE = "extra_prompt_package"
+		private const val EXTRA_PERMISSION_TARGET = "extra_permission_target"
+		private const val EXTRA_PERMISSION_NOTIFICATION_ID = "extra_permission_notification_id"
 		private const val REQUEST_POST_NOTIFICATIONS = 2001
+		private const val PERMISSION_REMINDER_CHANNEL_ID =
+			"discipline_guardian.permission_reminders"
+		private const val PERMISSION_REMINDER_CHANNEL_NAME = "权限提醒"
+		private const val PERMISSION_REMINDER_GROUP_KEY =
+			"discipline_guardian.permission_reminders.group"
 		@Volatile
 		private var pendingPromptPackage: String? = null
 
@@ -50,6 +62,7 @@ class MainActivity : FlutterActivity() {
 		GuardAccessibilityService.loadPersistedRules(applicationContext)
 		GuardianKeepAliveService.ensureRunningIfEnabled(applicationContext)
 		notifyPendingPromptPackage()
+		handlePermissionReminderIntent(intent)
 	}
 
 	override fun onNewIntent(intent: Intent) {
@@ -57,6 +70,7 @@ class MainActivity : FlutterActivity() {
 		setIntent(intent)
 		savePendingPromptPackage(intent)
 		notifyPendingPromptPackage()
+		handlePermissionReminderIntent(intent)
 	}
 
 	override fun onResume() {
@@ -99,12 +113,14 @@ class MainActivity : FlutterActivity() {
 						.distinctBy { it.activityInfo.packageName }
 						.filter { it.activityInfo.packageName != packageName }
 						.map {
+							val targetPackage = it.activityInfo.packageName
 							mapOf(
 								"appName" to it.loadLabel(packageManager).toString(),
-								"packageName" to it.activityInfo.packageName
+								"packageName" to targetPackage,
+								"firstInstallTime" to getFirstInstallTime(targetPackage),
 							)
 						}
-						.sortedBy { it["appName"]?.lowercase() ?: "" }
+						.sortedBy { it["appName"]?.toString()?.lowercase() ?: "" }
 
 					result.success(apps)
 				} catch (e: Exception) {
@@ -204,6 +220,13 @@ class MainActivity : FlutterActivity() {
 					"stopKeepAliveService" -> {
 						GuardianKeepAliveService.setEnabled(applicationContext, false)
 						GuardianKeepAliveService.stop(applicationContext)
+						result.success(true)
+					}
+					"syncPermissionReminderNotifications" -> {
+						@Suppress("UNCHECKED_CAST")
+						val reminders =
+							call.argument<List<Map<String, Any?>>>("reminders") ?: emptyList()
+						syncPermissionReminderNotifications(reminders)
 						result.success(true)
 					}
 					else -> result.notImplemented()
@@ -403,6 +426,23 @@ class MainActivity : FlutterActivity() {
 		return recentPackage
 	}
 
+	private fun getFirstInstallTime(targetPackage: String): Long? {
+		return try {
+			val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+				packageManager.getPackageInfo(
+					targetPackage,
+					PackageManager.PackageInfoFlags.of(0),
+				)
+			} else {
+				@Suppress("DEPRECATION")
+				packageManager.getPackageInfo(targetPackage, 0)
+			}
+			packageInfo.firstInstallTime.takeIf { it > 0L }
+		} catch (_: Exception) {
+			null
+		}
+	}
+
 	private fun launchAppByPackage(targetPackage: String): Boolean {
 		return try {
 			val launchIntent = packageManager.getLaunchIntentForPackage(targetPackage) ?: return false
@@ -576,6 +616,210 @@ class MainActivity : FlutterActivity() {
 
 	private fun openAccessibilitySettings() {
 		val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+			addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+		}
+		startActivity(intent)
+	}
+
+	private fun syncPermissionReminderNotifications(reminders: List<Map<String, Any?>>) {
+		val notificationManager = NotificationManagerCompat.from(this)
+		if (!areNotificationsEnabled() || reminders.isEmpty()) {
+			cancelAllPermissionReminderNotifications(notificationManager)
+			return
+		}
+
+		createPermissionReminderNotificationChannel()
+
+		val activeKeys = mutableSetOf<String>()
+		reminders.forEach { reminder ->
+			val key = (reminder["key"] as? String)?.trim().orEmpty()
+			val label = (reminder["label"] as? String)?.trim().orEmpty()
+			if (key.isEmpty() || label.isEmpty()) {
+				return@forEach
+			}
+
+			val notificationId = permissionReminderNotificationId(key) ?: return@forEach
+			activeKeys.add(key)
+			showPermissionReminderNotificationSafe(
+				notificationManager = notificationManager,
+				key = key,
+				label = label,
+				notificationId = notificationId,
+			)
+		}
+
+		cancelStalePermissionReminderNotifications(notificationManager, activeKeys)
+	}
+
+	private fun createPermissionReminderNotificationChannel() {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+			return
+		}
+
+		val notificationManager = getSystemService(NotificationManager::class.java) ?: return
+		val existingChannel = notificationManager.getNotificationChannel(PERMISSION_REMINDER_CHANNEL_ID)
+		if (existingChannel != null) {
+			return
+		}
+
+		val channel = NotificationChannel(
+			PERMISSION_REMINDER_CHANNEL_ID,
+			PERMISSION_REMINDER_CHANNEL_NAME,
+			NotificationManager.IMPORTANCE_DEFAULT,
+		).apply {
+			description = "提醒补齐自律守护者所需的系统权限"
+		}
+		notificationManager.createNotificationChannel(channel)
+	}
+
+	private fun showPermissionReminderNotification(
+		notificationManager: NotificationManagerCompat,
+		key: String,
+		label: String,
+		notificationId: Int,
+	) {
+		val pendingIntent = PendingIntent.getActivity(
+			this,
+			notificationId,
+			Intent(this, MainActivity::class.java).apply {
+				putExtra(EXTRA_PERMISSION_TARGET, key)
+				putExtra(EXTRA_PERMISSION_NOTIFICATION_ID, notificationId)
+				addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+			},
+			PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+		)
+
+		val notification = NotificationCompat.Builder(this, PERMISSION_REMINDER_CHANNEL_ID)
+			.setSmallIcon(android.R.drawable.stat_notify_error)
+			.setContentTitle("请开启$label")
+			.setContentText("点击前往授权，保障自律守护者正常运行。")
+			.setStyle(
+				NotificationCompat.BigTextStyle().bigText(
+					"当前缺少$label，点击后将直接跳转到对应的系统授权页面。",
+				),
+			)
+			.setContentIntent(pendingIntent)
+			.setAutoCancel(true)
+			.setOnlyAlertOnce(true)
+			.setCategory(NotificationCompat.CATEGORY_REMINDER)
+			.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+			.setGroup(PERMISSION_REMINDER_GROUP_KEY)
+			.build()
+
+		notificationManager.notify(notificationId, notification)
+	}
+
+	private fun showPermissionReminderNotificationSafe(
+		notificationManager: NotificationManagerCompat,
+		key: String,
+		label: String,
+		notificationId: Int,
+	) {
+		val pendingIntent = PendingIntent.getActivity(
+			this,
+			notificationId,
+			Intent(this, MainActivity::class.java).apply {
+				putExtra(EXTRA_PERMISSION_TARGET, key)
+				putExtra(EXTRA_PERMISSION_NOTIFICATION_ID, notificationId)
+				addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+			},
+			PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+		)
+
+		val notification = NotificationCompat.Builder(this, PERMISSION_REMINDER_CHANNEL_ID)
+			.setSmallIcon(android.R.drawable.stat_notify_error)
+			.setContentTitle("需要开启权限: " + label)
+			.setContentText("点击前往授权，保障自律守护者正常运行。")
+			.setStyle(
+				NotificationCompat.BigTextStyle().bigText(
+					"当前缺少" + label + "，点击后将直接跳转到对应的系统授权页面。",
+				),
+			)
+			.setContentIntent(pendingIntent)
+			.setAutoCancel(true)
+			.setOnlyAlertOnce(true)
+			.setCategory(NotificationCompat.CATEGORY_REMINDER)
+			.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+			.setGroup(PERMISSION_REMINDER_GROUP_KEY)
+			.build()
+
+		notificationManager.notify(notificationId, notification)
+	}
+
+	private fun cancelStalePermissionReminderNotifications(
+		notificationManager: NotificationManagerCompat,
+		activeKeys: Set<String>,
+	) {
+		permissionReminderKeys()
+			.filterNot(activeKeys::contains)
+			.mapNotNull(::permissionReminderNotificationId)
+			.forEach(notificationManager::cancel)
+	}
+
+	private fun cancelAllPermissionReminderNotifications(
+		notificationManager: NotificationManagerCompat = NotificationManagerCompat.from(this),
+	) {
+		permissionReminderKeys()
+			.mapNotNull(::permissionReminderNotificationId)
+			.forEach(notificationManager::cancel)
+	}
+
+	private fun permissionReminderKeys(): Set<String> =
+		setOf(
+			"usage_stats",
+			"accessibility",
+			"overlay",
+			"notifications",
+			"battery_optimization",
+		)
+
+	private fun permissionReminderNotificationId(key: String): Int? {
+		return when (key) {
+			"usage_stats" -> 4101
+			"accessibility" -> 4102
+			"overlay" -> 4103
+			"notifications" -> 4104
+			"battery_optimization" -> 4105
+			else -> null
+		}
+	}
+
+	private fun handlePermissionReminderIntent(intent: Intent?) {
+		val safeIntent = intent ?: return
+		val targetKey = safeIntent.getStringExtra(EXTRA_PERMISSION_TARGET)?.trim().orEmpty()
+		if (targetKey.isEmpty()) {
+			return
+		}
+
+		val notificationId = safeIntent.getIntExtra(EXTRA_PERMISSION_NOTIFICATION_ID, -1)
+		safeIntent.removeExtra(EXTRA_PERMISSION_TARGET)
+		safeIntent.removeExtra(EXTRA_PERMISSION_NOTIFICATION_ID)
+		if (notificationId != -1) {
+			NotificationManagerCompat.from(this).cancel(notificationId)
+		}
+		openPermissionReminderTarget(targetKey)
+	}
+
+	private fun openPermissionReminderTarget(targetKey: String) {
+		when (targetKey) {
+			"usage_stats" -> openUsageAccessSettings()
+			"accessibility" -> openAccessibilitySettings()
+			"overlay" -> openOverlaySettings()
+			"notifications" -> openNotificationSettings()
+			"battery_optimization" -> {
+				if (!openBatteryOptimizationSettings()) {
+					openAppDetailsSettings()
+				}
+			}
+			else -> openAppDetailsSettings()
+		}
+	}
+
+	private fun openAppDetailsSettings() {
+		val intent = Intent(
+			Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+			Uri.fromParts("package", packageName, null),
+		).apply {
 			addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 		}
 		startActivity(intent)

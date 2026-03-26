@@ -37,10 +37,12 @@ class AppListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final progress = limitMinutes > 0
         ? (usedMinutes / limitMinutes).clamp(0.0, 1.0)
         : 0.0;
     final isOverLimit = usedMinutes > limitMinutes;
+    final resolvedIconColor = iconColor ?? colorScheme.primary;
 
     return Material(
       color: Colors.transparent,
@@ -51,16 +53,16 @@ class AppListTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isOverLimit
                   ? const Color(0xFFE53935).withValues(alpha: 0.3)
-                  : Colors.grey.shade200,
+                  : colorScheme.outline.withValues(alpha: 0.2),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: colorScheme.onSurface.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -73,19 +75,18 @@ class AppListTile extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: (iconColor ?? const Color(0xFFFF6B9D))
-                      .withValues(alpha: 0.15),
+                  color: resolvedIconColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: icon != null
                     ? Icon(
                         icon,
-                        color: iconColor ?? const Color(0xFFFF6B9D),
+                        color: resolvedIconColor,
                         size: 24,
                       )
                     : Icon(
                         Icons.apps,
-                        color: iconColor ?? const Color(0xFFFF6B9D),
+                        color: resolvedIconColor,
                         size: 24,
                       ),
               ),
@@ -100,10 +101,10 @@ class AppListTile extends StatelessWidget {
                         Expanded(
                           child: Text(
                             appName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF333333),
+                              color: colorScheme.onSurface,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -139,11 +140,12 @@ class AppListTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
                         value: progress,
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor:
+                            colorScheme.outline.withValues(alpha: 0.15),
                         valueColor: AlwaysStoppedAnimation(
                           isOverLimit
                               ? const Color(0xFFE53935)
-                              : const Color(0xFFFF6B9D),
+                              : resolvedIconColor,
                         ),
                         minHeight: 6,
                       ),
@@ -156,7 +158,7 @@ class AppListTile extends StatelessWidget {
                         fontSize: 12,
                         color: isOverLimit
                             ? const Color(0xFFE53935)
-                            : Colors.grey.shade600,
+                            : colorScheme.onSurface.withValues(alpha: 0.72),
                       ),
                     ),
                   ],
@@ -166,7 +168,7 @@ class AppListTile extends StatelessWidget {
               // 箭头
               Icon(
                 Icons.chevron_right,
-                color: Colors.grey.shade400,
+                color: colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ],
           ),
@@ -206,10 +208,12 @@ class SimpleAppListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final progress = limitMinutes > 0
         ? (usedMinutes / limitMinutes).clamp(0.0, 1.0)
         : 0.0;
     final isOverLimit = usedMinutes > limitMinutes;
+    final resolvedIconColor = iconColor ?? colorScheme.primary;
 
     return InkWell(
       onTap: onTap,
@@ -222,13 +226,12 @@ class SimpleAppListTile extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: (iconColor ?? const Color(0xFFFF6B9D))
-                    .withValues(alpha: 0.15),
+                color: resolvedIconColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 icon ?? Icons.apps,
-                color: iconColor ?? const Color(0xFFFF6B9D),
+                color: resolvedIconColor,
                 size: 18,
               ),
             ),
@@ -239,10 +242,10 @@ class SimpleAppListTile extends StatelessWidget {
                 children: [
                   Text(
                     appName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF333333),
+                      color: colorScheme.onSurface,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -252,11 +255,12 @@ class SimpleAppListTile extends StatelessWidget {
                     borderRadius: BorderRadius.circular(2),
                     child: LinearProgressIndicator(
                       value: progress,
-                      backgroundColor: Colors.grey.shade200,
+                      backgroundColor:
+                          colorScheme.outline.withValues(alpha: 0.15),
                       valueColor: AlwaysStoppedAnimation(
                         isOverLimit
                             ? const Color(0xFFE53935)
-                            : const Color(0xFFFF6B9D),
+                            : resolvedIconColor,
                       ),
                       minHeight: 3,
                     ),
@@ -272,7 +276,7 @@ class SimpleAppListTile extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: isOverLimit
                     ? const Color(0xFFE53935)
-                    : const Color(0xFF666666),
+                    : colorScheme.onSurface.withValues(alpha: 0.72),
               ),
             ),
           ],

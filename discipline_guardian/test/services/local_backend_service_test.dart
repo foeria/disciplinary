@@ -1,8 +1,10 @@
 import 'package:discipline_guardian/data/models/app_model.dart';
+import 'package:discipline_guardian/data/models/plan_model.dart';
 import 'package:discipline_guardian/data/models/schedule_settings_model.dart';
 import 'package:discipline_guardian/data/models/usage_log_model.dart';
 import 'package:discipline_guardian/data/repositories/app_repository.dart';
 import 'package:discipline_guardian/data/repositories/lock_log_repository.dart';
+import 'package:discipline_guardian/data/repositories/plan_repository.dart';
 import 'package:discipline_guardian/data/repositories/settings_repository.dart';
 import 'package:discipline_guardian/data/repositories/usage_log_repository.dart';
 import 'package:discipline_guardian/platform/usage_stats_bridge.dart';
@@ -144,6 +146,25 @@ class _FakeSettingsRepository extends SettingsRepository {
   Future<ScheduleSettingsModel> getScheduleSettings() async => schedule;
 }
 
+class _FakePlanRepository extends PlanRepository {
+  _FakePlanRepository(this._plans);
+
+  final List<PlanModel> _plans;
+
+  @override
+  Future<List<PlanModel>> getPlans() async => _plans;
+
+  @override
+  Future<PlanModel?> getPlanById(String id) async {
+    for (final plan in _plans) {
+      if (plan.id == id) {
+        return plan;
+      }
+    }
+    return null;
+  }
+}
+
 class _FakeUsageStatsBridge extends UsageStatsBridge {
   _FakeUsageStatsBridge(this.usageByPackage);
 
@@ -204,6 +225,7 @@ void main() {
             updatedAt: now,
           ),
         ]),
+        planRepository: _FakePlanRepository(const <PlanModel>[]),
       );
 
       final data = await service.getHomeDashboardData();
@@ -221,6 +243,7 @@ void main() {
 
       final service = LocalBackendService(
         appRepository: _FakeAppRepository(const []),
+        planRepository: _FakePlanRepository(const <PlanModel>[]),
         usageLogRepository: _FakeUsageLogRepository(
           logs: [
             UsageLogModel(
@@ -296,6 +319,7 @@ void main() {
       );
       final service = LocalBackendService(
         appRepository: appRepository,
+        planRepository: _FakePlanRepository(const <PlanModel>[]),
         settingsRepository: _FakeSettingsRepository(
           schedule: ScheduleSettingsModel(
             id: 'default',
@@ -322,6 +346,61 @@ void main() {
       expect(apps.single.isLocked, isFalse);
       expect(usageLogRepository.logs, hasLength(1));
       expect(usageLogRepository.logs.single.usedMinutes, 0);
+    });
+
+    test('syncTodayUsageWithRules applies 30-minute limit for hundred-day plan apps', () async {
+      final now = DateTime.now();
+      final plan = PlanModel(
+        id: 'p1',
+        name: 'Focus Plan',
+        durationDays: 100,
+        startDate: now,
+        createdAt: now,
+        updatedAt: now,
+      );
+      final apps = [
+        AppModel(
+          id: 'a1',
+          appName: 'Plan App',
+          packageName: 'com.example.plan',
+          dailyLimitMinutes: 120,
+          usedMinutesToday: 0,
+          isMonitored: true,
+          isLocked: false,
+          isHundredDayPlan: true,
+          planId: plan.id,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ];
+      final service = LocalBackendService(
+        appRepository: _FakeAppRepository(apps),
+        planRepository: _FakePlanRepository([plan]),
+        settingsRepository: _FakeSettingsRepository(
+          schedule: ScheduleSettingsModel(
+            id: 'default',
+            isEnabled: false,
+            workdayStart: '00:00',
+            workdayEnd: '23:59',
+            weekendStart: '00:00',
+            weekendEnd: '23:59',
+            updatedAt: now,
+          ),
+        ),
+        usageLogRepository: _FakeUsageLogRepository(
+          logs: <UsageLogModel>[],
+          rankingRows: const [],
+        ),
+        usageStatsBridge: _FakeUsageStatsBridge(
+          const {'com.example.plan': 35},
+        ),
+      );
+
+      final result = await service.syncTodayUsageWithRules();
+
+      expect(result.success, isTrue);
+      expect(result.newlyLockedApps, hasLength(1));
+      expect(apps.single.isLocked, isTrue);
     });
   });
 }

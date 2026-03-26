@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import '../../../platform/device_apps_bridge.dart';
 import '../../widgets/anime_button.dart';
 import '../../widgets/anime_card.dart';
 
@@ -11,6 +11,7 @@ class AvailableApp {
   final String packageName;
   final IconData icon;
   final Color iconColor;
+  final DateTime? installedAt;
   final bool isInstalled;
 
   const AvailableApp({
@@ -18,13 +19,19 @@ class AvailableApp {
     required this.packageName,
     required this.icon,
     required this.iconColor,
+    this.installedAt,
     this.isInstalled = true,
   });
 }
 
 /// 添加应用页面
 class AddAppPage extends StatefulWidget {
-  final Function(String appName, String packageName, int limitMinutes) onAppSelected;
+  final Future<void> Function(
+    String appName,
+    String packageName,
+    int limitMinutes,
+    DateTime? installedAt,
+  ) onAppSelected;
   final Set<String> excludedPackages;
 
   const AddAppPage({
@@ -38,10 +45,7 @@ class AddAppPage extends StatefulWidget {
 }
 
 class _AddAppPageState extends State<AddAppPage> {
-  static const MethodChannel _deviceAppsChannel = MethodChannel(
-    'discipline_guardian/device_apps',
-  );
-
+  final DeviceAppsBridge _deviceAppsBridge = DeviceAppsBridge();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   AvailableApp? _selectedApp;
@@ -71,24 +75,18 @@ class _AddAppPageState extends State<AddAppPage> {
     }
 
     try {
-      final apps = await _deviceAppsChannel.invokeListMethod<dynamic>(
-        'getInstalledApps',
-      );
-      final rawApps = apps ?? const [];
+      final rawApps = await _deviceAppsBridge.getInstalledApps();
 
       final mappedApps = rawApps
-          .whereType<Map>()
           .map((app) {
-            final packageName = (app['packageName'] ?? '').toString();
-            final appName = (app['appName'] ?? '').toString();
             return AvailableApp(
-                appName: appName,
-                packageName: packageName,
-                icon: _resolveIcon(packageName),
-                iconColor: _resolveColor(packageName),
-              );
+              appName: app.appName,
+              packageName: app.packageName,
+              icon: _resolveIcon(app.packageName),
+              iconColor: _resolveColor(app.packageName),
+              installedAt: app.installedAt,
+            );
           })
-          .where((app) => app.appName.isNotEmpty && app.packageName.isNotEmpty)
           .where((app) => !widget.excludedPackages.contains(app.packageName))
           .toList(growable: false)
         ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
@@ -404,11 +402,12 @@ class _AddAppPageState extends State<AddAppPage> {
             width: double.infinity,
             child: AnimeButton(
               text: '确认添加',
-              onPressed: () {
-                widget.onAppSelected(
+              onPressed: () async {
+                await widget.onAppSelected(
                   _selectedApp!.appName,
                   _selectedApp!.packageName,
                   _limitMinutes,
+                  _selectedApp!.installedAt,
                 );
               },
             ),

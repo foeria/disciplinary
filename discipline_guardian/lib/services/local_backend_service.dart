@@ -1,14 +1,17 @@
 import '../data/models/app_model.dart';
 import '../data/models/notification_settings_model.dart';
+import '../data/models/plan_model.dart';
 import '../data/models/question_model.dart';
 import '../data/models/schedule_settings_model.dart';
 import '../data/models/usage_log_model.dart';
 import '../data/models/whitelist_app_model.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/lock_log_repository.dart';
+import '../data/repositories/plan_repository.dart';
 import '../data/repositories/question_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../data/repositories/usage_log_repository.dart';
+import '../platform/device_apps_bridge.dart';
 import '../platform/interception_bridge.dart';
 import '../platform/system_permissions_bridge.dart';
 import '../platform/usage_stats_bridge.dart';
@@ -43,11 +46,17 @@ class HomeAppOverview {
   final AppModel app;
   final AppHealthStatus status;
   final double progress;
+  final int effectiveLimitMinutes;
+  final bool isHundredDayPlan;
+  final String? planName;
 
   const HomeAppOverview({
     required this.app,
     required this.status,
     required this.progress,
+    required this.effectiveLimitMinutes,
+    required this.isHundredDayPlan,
+    required this.planName,
   });
 }
 
@@ -57,12 +66,14 @@ class HomeDashboardData {
   final int normalCount;
   final int warningCount;
   final int lockedCount;
+  final List<HundredDayPlanStatus> plans;
 
   const HomeDashboardData({
     required this.apps,
     required this.normalCount,
     required this.warningCount,
     required this.lockedCount,
+    required this.plans,
   });
 }
 
@@ -71,6 +82,8 @@ class AppRankingItem {
   final String appId;
   final String appName;
   final String packageName;
+  final DateTime? installedAt;
+  final bool isHundredDayPlan;
   final int totalUsedMinutes;
   final int totalOpenCount;
   final int totalUnlockCount;
@@ -79,10 +92,27 @@ class AppRankingItem {
     required this.appId,
     required this.appName,
     required this.packageName,
+    required this.installedAt,
+    required this.isHundredDayPlan,
     required this.totalUsedMinutes,
     required this.totalOpenCount,
     required this.totalUnlockCount,
   });
+
+  int get installedDays {
+    final installedAt = this.installedAt;
+    if (installedAt == null) {
+      return 0;
+    }
+    final now = DateTime.now();
+    final start = DateTime(
+      installedAt.year,
+      installedAt.month,
+      installedAt.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    return today.difference(start).inDays + 1;
+  }
 }
 
 /// 统计页聚合数据。
@@ -104,6 +134,112 @@ class StatsPageData {
     required this.totalUnlockCount,
     required this.averageUnlockMinutes,
   });
+}
+
+class HundredDayPlanStatus {
+  final String planId;
+  final String planName;
+  final bool enabled;
+  final DateTime? startedAt;
+  final int durationDays;
+  final List<AppModel> apps;
+  final int remainingDays;
+  final int elapsedDays;
+
+  const HundredDayPlanStatus({
+    required this.planId,
+    required this.planName,
+    required this.enabled,
+    required this.startedAt,
+    required this.durationDays,
+    required this.apps,
+    required this.remainingDays,
+    required this.elapsedDays,
+  });
+
+  bool get isActive => enabled && apps.isNotEmpty && remainingDays > 0;
+  bool get isCompleted => enabled && apps.isNotEmpty && remainingDays == 0;
+}
+
+class SystemPermissionReminderTarget {
+  final String key;
+  final String label;
+
+  const SystemPermissionReminderTarget({
+    required this.key,
+    required this.label,
+  });
+
+  Map<String, String> toMap() => <String, String>{
+        'key': key,
+        'label': label,
+      };
+}
+
+class SystemPermissionHubStatus {
+  final bool usageStatsGranted;
+  final bool accessibilityGranted;
+  final bool overlayGranted;
+  final bool notificationGranted;
+  final bool batteryOptimizationIgnored;
+  final bool keepAliveEnabled;
+  final bool keepAliveRunning;
+
+  const SystemPermissionHubStatus({
+    required this.usageStatsGranted,
+    required this.accessibilityGranted,
+    required this.overlayGranted,
+    required this.notificationGranted,
+    required this.batteryOptimizationIgnored,
+    required this.keepAliveEnabled,
+    required this.keepAliveRunning,
+  });
+
+  bool get hasAllPermissions =>
+      usageStatsGranted &&
+      accessibilityGranted &&
+      overlayGranted &&
+      notificationGranted &&
+      batteryOptimizationIgnored &&
+      keepAliveEnabled;
+
+  List<SystemPermissionReminderTarget> get missingReminderTargets =>
+      <SystemPermissionReminderTarget>[
+        if (!usageStatsGranted)
+          const SystemPermissionReminderTarget(
+            key: 'usage_stats',
+            label: '使用统计权限',
+          ),
+        if (!accessibilityGranted)
+          const SystemPermissionReminderTarget(
+            key: 'accessibility',
+            label: '无障碍权限',
+          ),
+        if (!overlayGranted)
+          const SystemPermissionReminderTarget(
+            key: 'overlay',
+            label: '悬浮窗权限',
+          ),
+        if (!notificationGranted)
+          const SystemPermissionReminderTarget(
+            key: 'notifications',
+            label: '通知权限',
+          ),
+        if (!batteryOptimizationIgnored)
+          const SystemPermissionReminderTarget(
+            key: 'battery_optimization',
+            label: '电池优化白名单',
+          ),
+      ];
+
+  List<String> get missingLabels => <String>[
+        if (!usageStatsGranted) '使用统计权限',
+        if (!accessibilityGranted) '无障碍权限',
+        if (!overlayGranted) '悬浮窗权限',
+        if (!notificationGranted) '通知权限',
+        if (!batteryOptimizationIgnored) '电池优化白名单',
+        if (!keepAliveEnabled) '后台保活服务',
+      ];
 }
 
 /// 系统拦截诊断摘要。
@@ -138,6 +274,8 @@ class LocalBackendService {
     SettingsRepository? settingsRepository,
     UsageLogRepository? usageLogRepository,
     LockLogRepository? lockLogRepository,
+    PlanRepository? planRepository,
+    DeviceAppsBridge? deviceAppsBridge,
     UsageStatsBridge? usageStatsBridge,
     SystemPermissionsBridge? systemPermissionsBridge,
     InterceptionBridge? interceptionBridge,
@@ -145,17 +283,21 @@ class LocalBackendService {
         _questionRepository = questionRepository ?? QuestionRepository(),
         _settingsRepository = settingsRepository ?? SettingsRepository(),
         _usageLogRepository = usageLogRepository ?? UsageLogRepository(),
-      _lockLogRepository = lockLogRepository ?? LockLogRepository(),
-      _usageStatsBridge = usageStatsBridge ?? UsageStatsBridge(),
-      _systemPermissionsBridge =
-        systemPermissionsBridge ?? SystemPermissionsBridge(),
-      _interceptionBridge = interceptionBridge ?? InterceptionBridge();
+        _lockLogRepository = lockLogRepository ?? LockLogRepository(),
+        _planRepository = planRepository ?? PlanRepository(),
+        _deviceAppsBridge = deviceAppsBridge ?? DeviceAppsBridge(),
+        _usageStatsBridge = usageStatsBridge ?? UsageStatsBridge(),
+        _systemPermissionsBridge =
+            systemPermissionsBridge ?? SystemPermissionsBridge(),
+        _interceptionBridge = interceptionBridge ?? InterceptionBridge();
 
   final AppRepository _appRepository;
   final QuestionRepository _questionRepository;
   final SettingsRepository _settingsRepository;
   final UsageLogRepository _usageLogRepository;
   final LockLogRepository _lockLogRepository;
+  final PlanRepository _planRepository;
+  final DeviceAppsBridge _deviceAppsBridge;
   final UsageStatsBridge _usageStatsBridge;
   final SystemPermissionsBridge _systemPermissionsBridge;
   final InterceptionBridge _interceptionBridge;
@@ -228,6 +370,26 @@ class LocalBackendService {
     return _systemPermissionsBridge.stopKeepAliveService();
   }
 
+  Future<SystemPermissionHubStatus> getSystemPermissionHubStatus() async {
+    final usageStatsGranted = await isUsageStatsPermissionGranted();
+    final accessibilityGranted = await isAccessibilityPermissionGranted();
+    final overlayGranted = await isOverlayPermissionGranted();
+    final notificationGranted = await areNotificationsEnabled();
+    final batteryOptimizationIgnored = await isBatteryOptimizationIgnored();
+    final keepAliveEnabled = await isKeepAliveEnabled();
+    final keepAliveRunning = await isKeepAliveRunning();
+
+    return SystemPermissionHubStatus(
+      usageStatsGranted: usageStatsGranted,
+      accessibilityGranted: accessibilityGranted,
+      overlayGranted: overlayGranted,
+      notificationGranted: notificationGranted,
+      batteryOptimizationIgnored: batteryOptimizationIgnored,
+      keepAliveEnabled: keepAliveEnabled,
+      keepAliveRunning: keepAliveRunning,
+    );
+  }
+
   Future<void> syncNativeInterceptionRules() async {
     final lockedApps = await _appRepository.getLockedMonitoredApps();
     final packages = lockedApps
@@ -293,6 +455,177 @@ class LocalBackendService {
     return _usageStatsBridge.getRecentForegroundPackage();
   }
 
+  Future<List<String>> getMissingSystemPermissionHubItems() async {
+    final status = await getSystemPermissionHubStatus();
+    return status.missingLabels;
+  }
+
+  Future<void> syncSystemPermissionReminderNotifications() async {
+    final status = await getSystemPermissionHubStatus();
+    final reminders = status.missingReminderTargets
+        .map((target) => target.toMap())
+        .toList(growable: false);
+    await _systemPermissionsBridge.syncPermissionReminderNotifications(
+      reminders,
+    );
+  }
+
+  Future<List<HundredDayPlanStatus>> getPlanStatuses({
+    List<AppModel>? monitoredApps,
+  }) async {
+    final plans = await _planRepository.getPlans();
+    final apps = monitoredApps ?? await _appRepository.getMonitoredApps();
+    final appsByPlanId = <String, List<AppModel>>{};
+    for (final app in apps) {
+      final planId = app.planId;
+      if (planId == null || planId.isEmpty) {
+        continue;
+      }
+      appsByPlanId.putIfAbsent(planId, () => <AppModel>[]).add(app);
+    }
+
+    return plans
+        .map(
+          (plan) => _toPlanStatus(
+            plan,
+            appsByPlanId[plan.id] ?? const <AppModel>[],
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<HundredDayPlanStatus?> getPlanStatus(
+    String planId, {
+    List<AppModel>? monitoredApps,
+  }) async {
+    final plan = await _planRepository.getPlanById(planId);
+    if (plan == null) {
+      return null;
+    }
+    final apps = monitoredApps ?? await _appRepository.getMonitoredApps();
+    final planApps = apps
+        .where((app) => app.planId == planId)
+        .toList(growable: false);
+    return _toPlanStatus(plan, planApps);
+  }
+
+  Future<PlanModel> createPlan({
+    required String name,
+    int durationDays = 100,
+  }) async {
+    final trimmedName = name.trim();
+    return _planRepository.createPlan(
+      name: trimmedName.isEmpty ? '未命名计划' : trimmedName,
+      durationDays: durationDays,
+    );
+  }
+
+  Future<void> configurePlan({
+    required String planId,
+    required List<DeviceInstalledApp> selectedApps,
+  }) async {
+    final uniqueByPackage = <String, DeviceInstalledApp>{
+      for (final app in selectedApps) app.packageName: app,
+    };
+    final selectedPackages = uniqueByPackage.keys.toSet();
+    final monitoredApps = await _appRepository.getMonitoredApps();
+    final existingByPackage = <String, AppModel>{
+      for (final app in monitoredApps) app.packageName: app,
+    };
+
+    for (final existing in monitoredApps.where((app) => app.planId == planId)) {
+      if (selectedPackages.contains(existing.packageName)) {
+        continue;
+      }
+      await _appRepository.setPlanMembership(
+        appId: existing.id,
+        planId: null,
+      );
+    }
+
+    for (final deviceApp in uniqueByPackage.values) {
+      final existing = existingByPackage[deviceApp.packageName];
+      if (existing == null) {
+        await _appRepository.createMonitoredApp(
+          appName: deviceApp.appName,
+          packageName: deviceApp.packageName,
+          dailyLimitMinutes: 60,
+          installedAt: deviceApp.installedAt,
+          planId: planId,
+        );
+        continue;
+      }
+
+      if (existing.planId != planId) {
+        await _appRepository.setPlanMembership(
+          appId: existing.id,
+          planId: planId,
+        );
+      }
+      if (existing.installedAt == null && deviceApp.installedAt != null) {
+        await _appRepository.updateInstalledAt(
+          appId: existing.id,
+          installedAt: deviceApp.installedAt!,
+        );
+      }
+    }
+
+    await syncTodayUsageWithRules();
+    await syncNativeInterceptionRules();
+  }
+
+  Future<void> clearPlanApps(String planId) async {
+    final apps = await _appRepository.getAppsByPlanId(planId);
+    for (final app in apps) {
+      await _appRepository.setPlanMembership(
+        appId: app.id,
+        planId: null,
+      );
+    }
+    await syncTodayUsageWithRules();
+    await syncNativeInterceptionRules();
+  }
+
+  Future<void> deletePlan(String planId) async {
+    await _planRepository.deletePlan(planId);
+  }
+
+  Future<void> deletePlans(List<String> planIds) async {
+    for (final planId in planIds) {
+      await deletePlan(planId);
+    }
+  }
+
+  Future<HundredDayPlanStatus?> getActivePlanStatusForApp(AppModel app) async {
+    final planId = app.planId;
+    if (planId == null || planId.isEmpty) {
+      return null;
+    }
+    final planStatus = await getPlanStatus(planId);
+    if (planStatus == null || !planStatus.isActive) {
+      return null;
+    }
+    return planStatus;
+  }
+
+  Future<int> getEffectiveLimitMinutesForApp(AppModel app) async {
+    final activePlanStatus = await getActivePlanStatusForApp(app);
+    return _resolveEffectiveLimitMinutes(
+      app: app,
+      activePlanIds: activePlanStatus == null
+          ? const <String>{}
+          : <String>{activePlanStatus.planId},
+    );
+  }
+
+  Future<int> getRequiredUnlockQuestionCountForApp(AppModel app) async {
+    final activePlanStatus = await getActivePlanStatusForApp(app);
+    if (activePlanStatus != null) {
+      return 100;
+    }
+    return _settingsRepository.getUnlockQuestionCount();
+  }
+
   Future<UsageSyncResult> syncTodayUsageWithRules() async {
     if (!await _usageStatsBridge.isSupported()) {
       return const UsageSyncResult(
@@ -315,6 +648,13 @@ class LocalBackendService {
         newlyLockedApps: [],
       );
     }
+    final planStatuses = await getPlanStatuses(
+      monitoredApps: apps,
+    );
+    final activePlanIds = planStatuses
+        .where((plan) => plan.isActive)
+        .map((plan) => plan.planId)
+        .toSet();
 
     final usageByPackage = await _usageStatsBridge.getTodayUsageMinutes(
       apps.map((app) => app.packageName).toList(growable: false),
@@ -380,7 +720,10 @@ class LocalBackendService {
 
       final effectiveLimitMinutes = hasActiveUnlockOverride
           ? app.unlockLimitOverrideMinutes!
-          : app.dailyLimitMinutes;
+          : _resolveEffectiveLimitMinutes(
+              app: app,
+              activePlanIds: activePlanIds,
+            );
 
       if (app.isLocked && usedMinutes < effectiveLimitMinutes) {
         await _appRepository.setLockedState(appId: app.id, isLocked: false);
@@ -419,8 +762,22 @@ class LocalBackendService {
   }
 
   Future<HomeDashboardData> getHomeDashboardData() async {
-    final apps = await _appRepository.getMonitoredApps();
-    final overview = apps.map(_toHomeOverview).toList(growable: false);
+    var apps = await _appRepository.getMonitoredApps();
+    apps = await _backfillInstalledAtForApps(apps);
+    final planStatuses = await getPlanStatuses(
+      monitoredApps: apps,
+    );
+    final planStatusById = {
+      for (final plan in planStatuses) plan.planId: plan,
+    };
+    final overview = apps
+        .map(
+          (app) => _toHomeOverview(
+            app,
+            planStatusById: planStatusById,
+          ),
+        )
+        .toList(growable: false);
 
     final normalCount = overview.where((a) => a.status == AppHealthStatus.normal).length;
     final warningCount = overview.where((a) => a.status == AppHealthStatus.warning).length;
@@ -431,11 +788,13 @@ class LocalBackendService {
       normalCount: normalCount,
       warningCount: warningCount,
       lockedCount: lockedCount,
+      plans: planStatuses,
     );
   }
 
-  Future<List<AppModel>> getAppsPageData() {
-    return _appRepository.getMonitoredApps();
+  Future<List<AppModel>> getAppsPageData() async {
+    final apps = await _appRepository.getMonitoredApps();
+    return _backfillInstalledAtForApps(apps);
   }
 
   Future<AppModel> addMonitoredApp({
@@ -443,12 +802,14 @@ class LocalBackendService {
     required String packageName,
     String? iconPath,
     required int dailyLimitMinutes,
+    DateTime? installedAt,
   }) async {
     final created = await _appRepository.createMonitoredApp(
       appName: appName,
       packageName: packageName,
       iconPath: iconPath,
       dailyLimitMinutes: dailyLimitMinutes,
+      installedAt: installedAt,
     );
     await syncTodayUsageWithRules();
     await syncNativeInterceptionRules();
@@ -471,9 +832,10 @@ class LocalBackendService {
     final extensionMinutes = await _settingsRepository.getUnlockExtensionMinutes();
     final app = await _appRepository.getAppById(appId);
     if (app != null) {
-      final baseline = app.usedMinutesToday > app.dailyLimitMinutes
+      final effectiveLimitMinutes = await getEffectiveLimitMinutesForApp(app);
+      final baseline = app.usedMinutesToday > effectiveLimitMinutes
           ? app.usedMinutesToday
-          : app.dailyLimitMinutes;
+          : effectiveLimitMinutes;
       await _appRepository.setUnlockLimitOverride(
         appId: appId,
         limitMinutes: baseline + extensionMinutes,
@@ -662,6 +1024,8 @@ class LocalBackendService {
   }
 
   Future<StatsPageData> getStatsData({required String period}) async {
+    final monitoredApps = await _appRepository.getMonitoredApps();
+    await _backfillInstalledAtForApps(monitoredApps);
     final now = DateTime.now();
     final int days = period == 'month' ? 30 : 7;
     final start = now.subtract(Duration(days: days - 1));
@@ -694,6 +1058,10 @@ class LocalBackendService {
         appId: row['app_id'] as String,
         appName: row['app_name'] as String,
         packageName: row['package_name'] as String,
+        installedAt: (row['installed_at'] as String?) != null
+            ? DateTime.parse(row['installed_at'] as String)
+            : null,
+        isHundredDayPlan: ((row['is_hundred_day_plan'] as int?) ?? 0) == 1,
         totalUsedMinutes: (row['total_used_minutes'] as int?) ?? 0,
         totalOpenCount: (row['total_open_count'] as int?) ?? 0,
         totalUnlockCount: (row['total_unlock_count'] as int?) ?? 0,
@@ -743,16 +1111,31 @@ class LocalBackendService {
     );
   }
 
-  HomeAppOverview _toHomeOverview(AppModel app) {
-    final ratio = app.dailyLimitMinutes == 0
+  HomeAppOverview _toHomeOverview(
+    AppModel app, {
+    required Map<String, HundredDayPlanStatus> planStatusById,
+  }) {
+    final activePlanIds = planStatusById.values
+        .where((plan) => plan.isActive)
+        .map((plan) => plan.planId)
+        .toSet();
+    final planName = app.planId == null ? null : planStatusById[app.planId!]?.planName;
+    final effectiveLimitMinutes = _resolveEffectiveLimitMinutes(
+      app: app,
+      activePlanIds: activePlanIds,
+    );
+    final ratio = effectiveLimitMinutes == 0
         ? 1.0
-        : app.usedMinutesToday / app.dailyLimitMinutes;
+        : app.usedMinutesToday / effectiveLimitMinutes;
 
     if (app.isLocked || ratio >= 1.0) {
       return HomeAppOverview(
         app: app,
         status: AppHealthStatus.locked,
         progress: ratio.clamp(0.0, 1.0),
+        effectiveLimitMinutes: effectiveLimitMinutes,
+        isHundredDayPlan: app.planId != null,
+        planName: planName,
       );
     }
 
@@ -761,6 +1144,9 @@ class LocalBackendService {
         app: app,
         status: AppHealthStatus.warning,
         progress: ratio.clamp(0.0, 1.0),
+        effectiveLimitMinutes: effectiveLimitMinutes,
+        isHundredDayPlan: app.planId != null,
+        planName: planName,
       );
     }
 
@@ -768,7 +1154,94 @@ class LocalBackendService {
       app: app,
       status: AppHealthStatus.normal,
       progress: ratio.clamp(0.0, 1.0),
+      effectiveLimitMinutes: effectiveLimitMinutes,
+      isHundredDayPlan: app.planId != null,
+      planName: planName,
     );
+  }
+
+  int _resolveEffectiveLimitMinutes({
+    required AppModel app,
+    required Set<String> activePlanIds,
+  }) {
+    final today = _formatDate(DateTime.now());
+    if (
+      app.unlockLimitOverrideMinutes != null &&
+      app.unlockLimitOverrideDate == today
+    ) {
+      return app.unlockLimitOverrideMinutes!;
+    }
+    final planId = app.planId;
+    if (planId != null && activePlanIds.contains(planId)) {
+      return 30;
+    }
+    return app.dailyLimitMinutes;
+  }
+
+  HundredDayPlanStatus _toPlanStatus(
+    PlanModel plan,
+    List<AppModel> apps,
+  ) {
+    final start = DateTime(
+      plan.startDate.year,
+      plan.startDate.month,
+      plan.startDate.day,
+    );
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final elapsedOffset = today.difference(start).inDays;
+    final remainingDays = (plan.durationDays - elapsedOffset).clamp(
+      0,
+      plan.durationDays,
+    );
+    final elapsedDays = (elapsedOffset + 1).clamp(0, plan.durationDays);
+    return HundredDayPlanStatus(
+      planId: plan.id,
+      planName: plan.name,
+      enabled: true,
+      startedAt: plan.startDate,
+      durationDays: plan.durationDays,
+      apps: apps,
+      remainingDays: remainingDays,
+      elapsedDays: elapsedDays,
+    );
+  }
+
+  Future<List<AppModel>> _backfillInstalledAtForApps(List<AppModel> apps) async {
+    final missingApps = apps.where((app) => app.installedAt == null).toList(
+          growable: false,
+        );
+    if (missingApps.isEmpty) {
+      return apps;
+    }
+
+    final installedApps = await _deviceAppsBridge.getInstalledApps();
+    if (installedApps.isEmpty) {
+      return apps;
+    }
+
+    final installedByPackage = <String, DeviceInstalledApp>{
+      for (final app in installedApps) app.packageName: app,
+    };
+
+    var changed = false;
+    final updatedApps = <AppModel>[];
+    for (final app in apps) {
+      final deviceApp = installedByPackage[app.packageName];
+      final installedAt = deviceApp?.installedAt;
+      if (app.installedAt == null && installedAt != null) {
+        await _appRepository.updateInstalledAt(
+          appId: app.id,
+          installedAt: installedAt,
+        );
+        updatedApps.add(app.copyWith(installedAt: installedAt));
+        changed = true;
+        continue;
+      }
+      updatedApps.add(app);
+    }
+
+    return changed ? updatedApps : apps;
   }
 
   String _formatDate(DateTime date) {

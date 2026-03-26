@@ -8,6 +8,9 @@ class AppModel {
   final int usedMinutesToday;
   final bool isMonitored;
   final bool isLocked;
+  final bool isHundredDayPlan;
+  final String? planId;
+  final DateTime? installedAt;
   final int? unlockLimitOverrideMinutes;
   final String? unlockLimitOverrideDate;
   final DateTime createdAt;
@@ -22,6 +25,9 @@ class AppModel {
     this.usedMinutesToday = 0,
     required this.isMonitored,
     this.isLocked = false,
+    this.isHundredDayPlan = false,
+    this.planId,
+    this.installedAt,
     this.unlockLimitOverrideMinutes,
     this.unlockLimitOverrideDate,
     required this.createdAt,
@@ -38,6 +44,13 @@ class AppModel {
       usedMinutesToday: (map['used_minutes_today'] as int?) ?? 0,
       isMonitored: (map['is_monitored'] as int) == 1,
       isLocked: ((map['is_locked'] as int?) ?? 0) == 1,
+      isHundredDayPlan:
+          ((map['is_hundred_day_plan'] as int?) ?? 0) == 1 ||
+          (map['plan_id'] as String?) != null,
+      planId: map['plan_id'] as String?,
+      installedAt: (map['installed_at'] as String?) != null
+          ? DateTime.parse(map['installed_at'] as String)
+          : null,
       unlockLimitOverrideMinutes: map['unlock_limit_override_minutes'] as int?,
       unlockLimitOverrideDate: map['unlock_limit_override_date'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
@@ -55,6 +68,9 @@ class AppModel {
       'used_minutes_today': usedMinutesToday,
       'is_monitored': isMonitored ? 1 : 0,
       'is_locked': isLocked ? 1 : 0,
+      'is_hundred_day_plan': (planId != null || isHundredDayPlan) ? 1 : 0,
+      'plan_id': planId,
+      'installed_at': installedAt?.toIso8601String(),
       'unlock_limit_override_minutes': unlockLimitOverrideMinutes,
       'unlock_limit_override_date': unlockLimitOverrideDate,
       'created_at': createdAt.toIso8601String(),
@@ -71,6 +87,9 @@ class AppModel {
     int? usedMinutesToday,
     bool? isMonitored,
     bool? isLocked,
+    bool? isHundredDayPlan,
+    String? planId,
+    DateTime? installedAt,
     int? unlockLimitOverrideMinutes,
     String? unlockLimitOverrideDate,
     DateTime? createdAt,
@@ -85,6 +104,10 @@ class AppModel {
       usedMinutesToday: usedMinutesToday ?? this.usedMinutesToday,
       isMonitored: isMonitored ?? this.isMonitored,
       isLocked: isLocked ?? this.isLocked,
+      isHundredDayPlan:
+          isHundredDayPlan ?? ((planId ?? this.planId) != null || this.isHundredDayPlan),
+      planId: planId ?? this.planId,
+      installedAt: installedAt ?? this.installedAt,
       unlockLimitOverrideMinutes:
           unlockLimitOverrideMinutes ?? this.unlockLimitOverrideMinutes,
       unlockLimitOverrideDate:

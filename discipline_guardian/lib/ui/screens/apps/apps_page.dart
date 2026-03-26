@@ -14,22 +14,26 @@ class MonitoredApp {
   final String id;
   final String appName;
   final String packageName;
+  final String? planName;
   final IconData icon;
   final Color iconColor;
   final int usedMinutes;
   final int limitMinutes;
   final int effectiveLimitMinutes;
+  final bool isHundredDayPlan;
   final bool isLocked;
 
   const MonitoredApp({
     required this.id,
     required this.appName,
     required this.packageName,
+    this.planName,
     required this.icon,
     required this.iconColor,
     required this.usedMinutes,
     required this.limitMinutes,
     required this.effectiveLimitMinutes,
+    this.isHundredDayPlan = false,
     this.isLocked = false,
   });
 }
@@ -67,16 +71,28 @@ class _AppsPageState extends State<AppsPage> {
   Future<void> _loadApps() async {
     await _backendService.syncTodayUsageFromDevice();
     final apps = await _backendService.getAppsPageData();
+    final planStatuses = await _backendService.getPlanStatuses(
+      monitoredApps: apps,
+    );
+    final planStatusById = {
+      for (final plan in planStatuses) plan.planId: plan,
+    };
     if (!mounted) {
       return;
     }
     setState(() {
       _monitoredApps
         ..clear()
-        ..addAll(apps.map(_toMonitoredApp));
+        ..addAll(
+          apps.map(
+            (app) => _toMonitoredApp(
+              app,
+              planStatusById: planStatusById,
+            ),
+          ),
+        );
       _isLoading = false;
     });
-    AppEvents.notifyHomeRefresh();
   }
 
   List<MonitoredApp> get _filteredApps {
@@ -158,12 +174,15 @@ class _AppsPageState extends State<AppsPage> {
         builder: (_) => LockScreen(
           appName: app.appName,
           usedMinutes: app.usedMinutes,
-          limitMinutes: app.limitMinutes,
+          limitMinutes: app.effectiveLimitMinutes,
           unlockMethod: UnlockMethod.question,
+          overrideQuestionCount: app.isHundredDayPlan ? 100 : null,
           titleText: '需要验证',
           reasonText: '$actionLabel前请先完成验证',
           onUnlockSuccess: () async {
-            await _backendService.incrementUnlockQuestionCountAfterSuccess();
+            if (!app.isHundredDayPlan) {
+              await _backendService.incrementUnlockQuestionCountAfterSuccess();
+            }
             if (!mounted) {
               return;
             }
@@ -184,7 +203,9 @@ class _AppsPageState extends State<AppsPage> {
   }
 
   bool _requiresManagementAuthorization(MonitoredApp app) {
-    return app.isLocked || app.usedMinutes >= app.effectiveLimitMinutes;
+    return app.isHundredDayPlan ||
+        app.isLocked ||
+        app.usedMinutes >= app.effectiveLimitMinutes;
   }
 
   Future<void> _confirmDelete(MonitoredApp app) async {
@@ -290,6 +311,29 @@ class _AppsPageState extends State<AppsPage> {
     return isReady;
   }
 
+  Future<bool> _ensureAllPermissionHubItemsReady() async {
+    final missingPermissions =
+        await _backendService.getMissingSystemPermissionHubItems();
+    if (missingPermissions.isEmpty || !mounted) {
+      return missingPermissions.isEmpty;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('系统权限中枢仍有未开启项：${missingPermissions.join('、')}'),
+        action: SnackBarAction(
+          label: '去开启',
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SystemPermissionsPage()),
+            );
+          },
+        ),
+      ),
+    );
+    return false;
+  }
+
   Future<void> _addApp() async {
     final permissionsReady = await _ensureMonitoringPermissionsAssigned();
     if (!permissionsReady || !mounted) {
@@ -303,11 +347,12 @@ class _AppsPageState extends State<AppsPage> {
           excludedPackages: _monitoredApps
               .map((app) => app.packageName)
               .toSet(),
-          onAppSelected: (appName, packageName, limitMinutes) async {
+          onAppSelected: (appName, packageName, limitMinutes, installedAt) async {
             await _backendService.addMonitoredApp(
               appName: appName,
               packageName: packageName,
               dailyLimitMinutes: limitMinutes,
+              installedAt: installedAt,
             );
             if (!mounted) {
               return;
@@ -321,6 +366,10 @@ class _AppsPageState extends State<AppsPage> {
   }
 
   Future<void> _openAppSettings(MonitoredApp app) async {
+    final permissionsReady = await _ensureAllPermissionHubItemsReady();
+    if (!permissionsReady || !mounted) {
+      return;
+    }
     final isAuthorized = await _requestManagementAuthorization(
       app,
       actionLabel: '编辑监控设置',
@@ -335,10 +384,12 @@ class _AppsPageState extends State<AppsPage> {
         builder: (context) => AppSettingsPage(
           appName: app.appName,
           packageName: app.packageName,
+          planName: app.planName,
           icon: app.icon,
           iconColor: app.iconColor,
           usedMinutes: app.usedMinutes,
           limitMinutes: app.limitMinutes,
+          isHundredDayPlan: app.isHundredDayPlan,
           isLocked: app.isLocked,
           onLimitChanged: (newLimit) async {
             await _backendService.updateAppLimit(
@@ -382,28 +433,52 @@ class _AppsPageState extends State<AppsPage> {
     );
   }
 
-  MonitoredApp _toMonitoredApp(AppModel app) {
+  MonitoredApp _toMonitoredApp(
+    AppModel app, {
+    required Map<String, HundredDayPlanStatus> planStatusById,
+  }) {
     final package = app.packageName;
+    final activePlanIds = planStatusById.values
+        .where((plan) => plan.isActive)
+        .map((plan) => plan.planId)
+        .toSet();
+    final planName =
+        app.planId == null ? null : planStatusById[app.planId!]?.planName;
     return MonitoredApp(
       id: app.id,
       appName: app.appName,
       packageName: package,
+      planName: planName,
       icon: _resolveIcon(package),
       iconColor: _resolveColor(package),
       usedMinutes: app.usedMinutesToday,
-      limitMinutes: app.dailyLimitMinutes,
-      effectiveLimitMinutes: _resolveEffectiveLimitMinutes(app),
+      limitMinutes: _resolveEffectiveLimitMinutes(
+        app,
+        activePlanIds: activePlanIds,
+      ),
+      effectiveLimitMinutes: _resolveEffectiveLimitMinutes(
+        app,
+        activePlanIds: activePlanIds,
+      ),
+      isHundredDayPlan: app.planId != null,
       isLocked: app.isLocked,
     );
   }
 
-  int _resolveEffectiveLimitMinutes(AppModel app) {
+  int _resolveEffectiveLimitMinutes(
+    AppModel app, {
+    required Set<String> activePlanIds,
+  }) {
     final today = _formatDate(DateTime.now());
     if (
       app.unlockLimitOverrideMinutes != null &&
       app.unlockLimitOverrideDate == today
     ) {
       return app.unlockLimitOverrideMinutes!;
+    }
+    final planId = app.planId;
+    if (planId != null && activePlanIds.contains(planId)) {
+      return 30;
     }
     return app.dailyLimitMinutes;
   }
@@ -540,14 +615,40 @@ class _AppsPageState extends State<AppsPage> {
                     children: [
                       Row(
                         children: [
-                          Text(
-                            app.appName,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF333333),
+                          Expanded(
+                            child: Text(
+                              app.appName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF333333),
+                              ),
                             ),
                           ),
+                          if (app.isHundredDayPlan) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF7E57C2)
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                '100天计划',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF7E57C2),
+                                ),
+                              ),
+                            ),
+                          ],
                           if (app.isLocked) ...[
                             const SizedBox(width: 8),
                             Container(
@@ -574,7 +675,9 @@ class _AppsPageState extends State<AppsPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        app.isLocked ? '已达到限制，点按可查看处理方式' : '点按可查看监控设置',
+                        app.isHundredDayPlan
+                            ? '自律100天规则生效中：每天30分钟，解锁需答100题'
+                            : (app.isLocked ? '已达到限制，点按可查看处理方式' : '点按可查看监控设置'),
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,

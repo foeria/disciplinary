@@ -21,6 +21,7 @@ class LockScreen extends StatefulWidget {
   final String titleText;
   final String reasonText;
   final bool showUsageSummary;
+  final int? overrideQuestionCount;
   final Future<void> Function() onUnlockSuccess;
   final Future<void> Function()? onExitRequested;
   final VoidCallback? onEmergencyCall;
@@ -34,6 +35,7 @@ class LockScreen extends StatefulWidget {
     this.titleText = '应用已锁定',
     this.reasonText = '使用时间已达上限，请完成知识问答后继续使用',
     this.showUsageSummary = true,
+    this.overrideQuestionCount,
     required this.onUnlockSuccess,
     this.onExitRequested,
     this.onEmergencyCall,
@@ -87,7 +89,9 @@ class _LockScreenState extends State<LockScreen>
 
   Future<void> _loadUnlockConfig() async {
     try {
-      final questionCount = await _backendService.getUnlockQuestionCount();
+      final questionCount =
+          widget.overrideQuestionCount ??
+          await _backendService.getUnlockQuestionCount();
       final fetchCount = (questionCount * 3).clamp(12, 60);
       final questionModels = await _backendService.getRandomUnlockQuestions(
         count: fetchCount,

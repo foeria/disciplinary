@@ -33,6 +33,8 @@ class SettingsTable {
   static const String keyResetStrategy = 'reset_strategy';
   static const String keyWhitelistEnabled = 'whitelist_enabled';
   static const String keyOnboardingCompleted = 'onboarding_completed';
+  static const String keyHundredDayPlanEnabled = 'hundred_day_plan_enabled';
+  static const String keyHundredDayPlanStartDate = 'hundred_day_plan_start_date';
 
   // unlock_method 合法值
   static const String methodQuestion = 'question';
@@ -76,6 +78,16 @@ class SettingsTable {
       {
         columnKey: keyOnboardingCompleted,
         columnValue: '0',
+        columnUpdatedAt: now,
+      },
+      {
+        columnKey: keyHundredDayPlanEnabled,
+        columnValue: '0',
+        columnUpdatedAt: now,
+      },
+      {
+        columnKey: keyHundredDayPlanStartDate,
+        columnValue: '',
         columnUpdatedAt: now,
       },
     ];
