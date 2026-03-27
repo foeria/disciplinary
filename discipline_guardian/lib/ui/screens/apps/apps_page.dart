@@ -252,11 +252,14 @@ class _AppsPageState extends State<AppsPage> {
         await _backendService.isAccessibilityPermissionGranted();
     final hasOverlayPermission =
         await _backendService.isOverlayPermissionGranted();
+    final hasBatteryOptimizationPermission =
+        await _backendService.isBatteryOptimizationIgnored();
 
     final missingPermissions = <String>[
       if (!hasUsagePermission) '使用统计权限',
       if (!hasAccessibilityPermission) '无障碍权限',
       if (!hasOverlayPermission) '悬浮窗权限',
+      if (!hasBatteryOptimizationPermission) '电池优化白名单',
     ];
 
     if (missingPermissions.isEmpty) {
@@ -300,8 +303,13 @@ class _AppsPageState extends State<AppsPage> {
     final recheckedAccessibility =
         await _backendService.isAccessibilityPermissionGranted();
     final recheckedOverlay = await _backendService.isOverlayPermissionGranted();
+    final recheckedBatteryOptimization =
+        await _backendService.isBatteryOptimizationIgnored();
     final isReady =
-        recheckedUsage && recheckedAccessibility && recheckedOverlay;
+        recheckedUsage &&
+        recheckedAccessibility &&
+        recheckedOverlay &&
+        recheckedBatteryOptimization;
 
     if (!isReady && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

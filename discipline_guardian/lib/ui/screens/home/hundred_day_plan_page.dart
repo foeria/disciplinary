@@ -258,6 +258,7 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Scaffold(
       backgroundColor: _scaffoldBackground,
       appBar: AppBar(
@@ -310,9 +311,13 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
                       ],
                     ),
                   ),
-                  SafeArea(
-                    top: false,
-                    child: Padding(
+                  AnimatedPadding(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       child: _hasPlanApps
                           ? Row(
@@ -354,6 +359,7 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
                                         : _confirmPlan,
                               ),
                             ),
+                      ),
                     ),
                   ),
                 ],

@@ -56,7 +56,10 @@ class _PermissionPageState extends State<PermissionPage>
   bool _keepAliveEnabled = false;
 
   bool get _requiredPermissionsReady {
-    return _usagePermissionGranted && _accessibilityGranted && _overlayGranted;
+    return _usagePermissionGranted &&
+        _accessibilityGranted &&
+        _overlayGranted &&
+        _batteryOptimizationIgnored;
   }
 
   @override
@@ -275,7 +278,7 @@ class _PermissionPageState extends State<PermissionPage>
         icon: Icons.battery_charging_full_outlined,
         color: const Color(0xFFFFB74D),
         granted: _batteryOptimizationIgnored,
-        required: false,
+        required: true,
         actionLabel: '去开启',
         onTap: _openBatteryOptimizationFlow,
       ),

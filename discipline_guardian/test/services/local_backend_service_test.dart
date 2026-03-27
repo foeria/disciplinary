@@ -3,15 +3,19 @@ import 'package:discipline_guardian/data/models/growth_app_log_model.dart';
 import 'package:discipline_guardian/data/models/growth_daily_log_model.dart';
 import 'package:discipline_guardian/data/models/growth_profile_model.dart';
 import 'package:discipline_guardian/data/models/lock_log_model.dart';
+import 'package:discipline_guardian/data/models/notification_settings_model.dart';
 import 'package:discipline_guardian/data/models/plan_model.dart';
 import 'package:discipline_guardian/data/models/schedule_settings_model.dart';
 import 'package:discipline_guardian/data/models/usage_log_model.dart';
+import 'package:discipline_guardian/data/models/whitelist_app_model.dart';
 import 'package:discipline_guardian/data/repositories/app_repository.dart';
 import 'package:discipline_guardian/data/repositories/growth_repository.dart';
 import 'package:discipline_guardian/data/repositories/lock_log_repository.dart';
 import 'package:discipline_guardian/data/repositories/plan_repository.dart';
 import 'package:discipline_guardian/data/repositories/settings_repository.dart';
 import 'package:discipline_guardian/data/repositories/usage_log_repository.dart';
+import 'package:discipline_guardian/platform/interception_bridge.dart';
+import 'package:discipline_guardian/platform/system_permissions_bridge.dart';
 import 'package:discipline_guardian/platform/usage_stats_bridge.dart';
 import 'package:discipline_guardian/services/local_backend_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +27,31 @@ class _FakeAppRepository extends AppRepository {
 
   @override
   Future<List<AppModel>> getMonitoredApps() async => _apps;
+
+  @override
+  Future<List<AppModel>> getLockedMonitoredApps() async {
+    return _apps.where((app) => app.isLocked).toList(growable: false);
+  }
+
+  @override
+  Future<AppModel?> getAppById(String appId) async {
+    for (final app in _apps) {
+      if (app.id == appId) {
+        return app;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<AppModel?> getAppByPackageName(String packageName) async {
+    for (final app in _apps) {
+      if (app.packageName == packageName) {
+        return app;
+      }
+    }
+    return null;
+  }
 
   @override
   Future<void> updateUsedMinutesToday({
@@ -294,15 +323,40 @@ class _FakeGrowthRepository extends GrowthRepository {
 class _FakeSettingsRepository extends SettingsRepository {
   _FakeSettingsRepository({
     required this.schedule,
-  });
+    NotificationSettingsModel? notificationSettings,
+    this.whitelistEnabled = false,
+    List<WhitelistAppModel>? whitelistApps,
+  })  : whitelistApps = whitelistApps ?? const <WhitelistAppModel>[],
+        _notificationSettings =
+            notificationSettings ??
+            NotificationSettingsModel(
+              id: 'default',
+              reminderEnabled: true,
+              reminderMinutes: 3,
+              liveActivityEnabled: false,
+              soundEnabled: true,
+              quietHoursStart: null,
+              quietHoursEnd: null,
+              updatedAt: DateTime.now(),
+            );
 
   final ScheduleSettingsModel schedule;
+  final bool whitelistEnabled;
+  final List<WhitelistAppModel> whitelistApps;
+  final NotificationSettingsModel _notificationSettings;
 
   @override
-  Future<bool> getWhitelistEnabled() async => false;
+  Future<bool> getWhitelistEnabled() async => whitelistEnabled;
+
+  @override
+  Future<List<WhitelistAppModel>> getWhitelistApps() async => whitelistApps;
 
   @override
   Future<ScheduleSettingsModel> getScheduleSettings() async => schedule;
+
+  @override
+  Future<NotificationSettingsModel> getNotificationSettings() async =>
+      _notificationSettings;
 
   @override
   Future<String> getUnlockMethod() async => 'question';
@@ -312,6 +366,63 @@ class _FakeSettingsRepository extends SettingsRepository {
 
   @override
   Future<int> getUnlockExtensionMinutes() async => 15;
+}
+
+class _FakeSystemPermissionsBridge extends SystemPermissionsBridge {
+  _FakeSystemPermissionsBridge({
+    required this.notificationsEnabled,
+  });
+
+  final bool notificationsEnabled;
+
+  @override
+  Future<bool> areNotificationsEnabled() async => notificationsEnabled;
+}
+
+class _FakeInterceptionBridge extends InterceptionBridge {
+  List<String> blockedPackages = const <String>[];
+  List<Map<String, Object?>> monitoringRules = const <Map<String, Object?>>[];
+  bool reminderEnabled = false;
+  int reminderMinutes = 0;
+  bool notificationsEnabled = false;
+  bool soundEnabled = false;
+  bool scheduleEnabled = false;
+  String workdayStart = '00:00';
+  String workdayEnd = '23:59';
+  String weekendStart = '00:00';
+  String weekendEnd = '23:59';
+
+  @override
+  Future<void> setBlockedPackages(List<String> packages) async {
+    blockedPackages = List<String>.from(packages);
+  }
+
+  @override
+  Future<void> syncUsageMonitoringConfig({
+    required List<Map<String, Object?>> rules,
+    required bool reminderEnabled,
+    required int reminderMinutes,
+    required bool notificationsEnabled,
+    required bool soundEnabled,
+    required bool scheduleEnabled,
+    required String workdayStart,
+    required String workdayEnd,
+    required String weekendStart,
+    required String weekendEnd,
+  }) async {
+    monitoringRules = rules
+        .map((rule) => Map<String, Object?>.from(rule))
+        .toList(growable: false);
+    this.reminderEnabled = reminderEnabled;
+    this.reminderMinutes = reminderMinutes;
+    this.notificationsEnabled = notificationsEnabled;
+    this.soundEnabled = soundEnabled;
+    this.scheduleEnabled = scheduleEnabled;
+    this.workdayStart = workdayStart;
+    this.workdayEnd = workdayEnd;
+    this.weekendStart = weekendStart;
+    this.weekendEnd = weekendEnd;
+  }
 }
 
 class _FakePlanRepository extends PlanRepository {
@@ -581,6 +692,131 @@ void main() {
       expect(result.success, isTrue);
       expect(result.newlyLockedApps, hasLength(1));
       expect(apps.single.isLocked, isTrue);
+    });
+
+    test('syncNativeInterceptionRules syncs reminder config and effective limits', () async {
+      final now = DateTime.now();
+      final today = _formatDate(now);
+      final plan = PlanModel(
+        id: 'p1',
+        name: 'Focus Plan',
+        durationDays: 100,
+        startDate: now,
+        createdAt: now,
+        updatedAt: now,
+      );
+      final bridge = _FakeInterceptionBridge();
+      final service = LocalBackendService(
+        appRepository: _FakeAppRepository([
+          AppModel(
+            id: 'locked',
+            appName: 'Locked App',
+            packageName: 'com.example.locked',
+            dailyLimitMinutes: 60,
+            isMonitored: true,
+            isLocked: true,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          AppModel(
+            id: 'plan',
+            appName: 'Plan App',
+            packageName: 'com.example.plan',
+            dailyLimitMinutes: 90,
+            isMonitored: true,
+            planId: plan.id,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          AppModel(
+            id: 'override',
+            appName: 'Override App',
+            packageName: 'com.example.override',
+            dailyLimitMinutes: 45,
+            isMonitored: true,
+            unlockLimitOverrideMinutes: 55,
+            unlockLimitOverrideDate: today,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          AppModel(
+            id: 'white',
+            appName: 'Whitelist App',
+            packageName: 'com.example.white',
+            dailyLimitMinutes: 30,
+            isMonitored: true,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        ]),
+        planRepository: _FakePlanRepository([plan]),
+        growthRepository: _FakeGrowthRepository(),
+        settingsRepository: _FakeSettingsRepository(
+          schedule: ScheduleSettingsModel(
+            id: 'default',
+            isEnabled: true,
+            workdayStart: '09:00',
+            workdayEnd: '18:00',
+            weekendStart: '10:00',
+            weekendEnd: '16:00',
+            updatedAt: now,
+          ),
+          notificationSettings: NotificationSettingsModel(
+            id: 'default',
+            reminderEnabled: true,
+            reminderMinutes: 3,
+            liveActivityEnabled: false,
+            soundEnabled: false,
+            quietHoursStart: null,
+            quietHoursEnd: null,
+            updatedAt: now,
+          ),
+          whitelistEnabled: true,
+          whitelistApps: [
+            WhitelistAppModel(
+              id: 'white-1',
+              appName: 'Whitelist App',
+              packageName: 'com.example.white',
+              createdAt: now,
+            ),
+          ],
+        ),
+        systemPermissionsBridge: _FakeSystemPermissionsBridge(
+          notificationsEnabled: true,
+        ),
+        interceptionBridge: bridge,
+      );
+
+      await service.syncNativeInterceptionRules();
+
+      expect(bridge.blockedPackages, ['com.example.locked']);
+      expect(bridge.reminderEnabled, isTrue);
+      expect(bridge.reminderMinutes, 3);
+      expect(bridge.notificationsEnabled, isTrue);
+      expect(bridge.soundEnabled, isFalse);
+      expect(bridge.scheduleEnabled, isTrue);
+      expect(bridge.workdayStart, '09:00');
+      expect(bridge.workdayEnd, '18:00');
+      expect(bridge.weekendStart, '10:00');
+      expect(bridge.weekendEnd, '16:00');
+      expect(
+        bridge.monitoringRules.any(
+          (rule) => rule['packageName'] == 'com.example.white',
+        ),
+        isFalse,
+      );
+
+      final planRule = bridge.monitoringRules.singleWhere(
+        (rule) => rule['packageName'] == 'com.example.plan',
+      );
+      expect(planRule['baseLimitMinutes'], 30);
+
+      final overrideRule = bridge.monitoringRules.singleWhere(
+        (rule) => rule['packageName'] == 'com.example.override',
+      );
+      expect(overrideRule['baseLimitMinutes'], 45);
+      expect(overrideRule['unlockLimitOverrideMinutes'], 55);
+      expect(overrideRule['unlockLimitOverrideDate'], today);
     });
   });
 }

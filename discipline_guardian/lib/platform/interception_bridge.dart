@@ -57,6 +57,38 @@ class InterceptionBridge {
     );
   }
 
+  Future<void> syncUsageMonitoringConfig({
+    required List<Map<String, Object?>> rules,
+    required bool reminderEnabled,
+    required int reminderMinutes,
+    required bool notificationsEnabled,
+    required bool soundEnabled,
+    required bool scheduleEnabled,
+    required String workdayStart,
+    required String workdayEnd,
+    required String weekendStart,
+    required String weekendEnd,
+  }) async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    await _channel.invokeMethod<void>(
+      'syncUsageMonitoringConfig',
+      <String, Object?>{
+        'rules': rules,
+        'reminderEnabled': reminderEnabled,
+        'reminderMinutes': reminderMinutes,
+        'notificationsEnabled': notificationsEnabled,
+        'soundEnabled': soundEnabled,
+        'scheduleEnabled': scheduleEnabled,
+        'workdayStart': workdayStart,
+        'workdayEnd': workdayEnd,
+        'weekendStart': weekendStart,
+        'weekendEnd': weekendEnd,
+      },
+    );
+  }
+
   Future<void> setInterceptionEnabled(bool enabled) async {
     if (!Platform.isAndroid) {
       return;

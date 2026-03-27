@@ -275,10 +275,10 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                onPressed: _limitMinutes > 15
+                onPressed: _limitMinutes > 1
                     ? () {
                         setState(() {
-                          _limitMinutes -= 15;
+                          _limitMinutes -= 1;
                         });
                       }
                     : null,
@@ -298,7 +298,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                 onPressed: _limitMinutes < 480
                     ? () {
                         setState(() {
-                          _limitMinutes += 15;
+                          _limitMinutes += 1;
                         });
                       }
                     : null,
@@ -311,9 +311,9 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
           const SizedBox(height: 8),
           Slider(
             value: _limitMinutes.toDouble(),
-            min: 15,
+            min: 1,
             max: 480,
-            divisions: 31,
+            divisions: 479,
             activeColor: const Color(0xFFFF6B9D),
             onChanged: (value) {
               setState(() {
@@ -326,7 +326,7 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '15m',
+                '1m',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
               Text(

@@ -6,15 +6,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.app.usage.UsageEvents
-import android.app.usage.UsageStatsManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
-import java.util.Calendar
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.engine.FlutterEngine
@@ -249,6 +246,26 @@ class MainActivity : FlutterActivity() {
 						GuardAccessibilityService.persistInterceptionEnabled(applicationContext, enabled)
 						result.success(true)
 					}
+					"syncUsageMonitoringConfig" -> {
+						@Suppress("UNCHECKED_CAST")
+						val rules =
+							call.argument<List<Map<String, Any?>>>("rules") ?: emptyList()
+						GuardAccessibilityService.updateUsageMonitoringConfig(
+							context = applicationContext,
+							rules = rules,
+							reminderEnabled = call.argument<Boolean>("reminderEnabled") ?: false,
+							reminderMinutes = call.argument<Int>("reminderMinutes") ?: 3,
+							notificationsEnabled = call.argument<Boolean>("notificationsEnabled")
+								?: false,
+							soundEnabled = call.argument<Boolean>("soundEnabled") ?: true,
+							scheduleEnabled = call.argument<Boolean>("scheduleEnabled") ?: false,
+							workdayStart = call.argument<String>("workdayStart") ?: "00:00",
+							workdayEnd = call.argument<String>("workdayEnd") ?: "23:59",
+							weekendStart = call.argument<String>("weekendStart") ?: "00:00",
+							weekendEnd = call.argument<String>("weekendEnd") ?: "23:59",
+						)
+						result.success(true)
+					}
 					"getLastAccessibilityForegroundApp" -> {
 						result.success(GuardAccessibilityService.getLastForegroundPackage())
 					}
@@ -323,107 +340,15 @@ class MainActivity : FlutterActivity() {
 	}
 
 	private fun getTodayUsageMinutes(packageNames: List<String>): Map<String, Int> {
-		if (packageNames.isEmpty()) {
-			return emptyMap()
-		}
-
-		val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-		val endTime = System.currentTimeMillis()
-		val startCalendar = Calendar.getInstance().apply {
-			set(Calendar.HOUR_OF_DAY, 0)
-			set(Calendar.MINUTE, 0)
-			set(Calendar.SECOND, 0)
-			set(Calendar.MILLISECOND, 0)
-		}
-		val startTime = startCalendar.timeInMillis
-
-		val targetPackages = packageNames.toSet()
-		val usageMsByPackage = mutableMapOf<String, Long>()
-
-		// 1) Prefer aggregate query when available.
-		val aggregateMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
-		aggregateMap.forEach { (pkg, stats) ->
-			if (targetPackages.contains(pkg)) {
-				val current = usageMsByPackage[pkg] ?: 0L
-				usageMsByPackage[pkg] = maxOf(current, stats.totalTimeInForeground)
-			}
-		}
-
-		// 2) Fallback: daily stats list (some ROMs return sparse aggregate maps).
-		val usageStatsList = usageStatsManager.queryUsageStats(
-			UsageStatsManager.INTERVAL_DAILY,
-			startTime,
-			endTime,
-		)
-		usageStatsList?.forEach { stats ->
-			val pkg = stats.packageName
-			if (targetPackages.contains(pkg)) {
-				val current = usageMsByPackage[pkg] ?: 0L
-				usageMsByPackage[pkg] = maxOf(current, stats.totalTimeInForeground)
-			}
-		}
-
-		// 3) Fallback: reconstruct rough usage from foreground/background events.
-		val activeStarts = mutableMapOf<String, Long>()
-		val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
-		val event = UsageEvents.Event()
-		while (usageEvents.hasNextEvent()) {
-			usageEvents.getNextEvent(event)
-			val pkg = event.packageName ?: continue
-			if (!targetPackages.contains(pkg)) {
-				continue
-			}
-			when (event.eventType) {
-				UsageEvents.Event.MOVE_TO_FOREGROUND,
-				UsageEvents.Event.ACTIVITY_RESUMED -> {
-					activeStarts[pkg] = event.timeStamp
-				}
-				UsageEvents.Event.MOVE_TO_BACKGROUND,
-				UsageEvents.Event.ACTIVITY_PAUSED,
-				UsageEvents.Event.ACTIVITY_STOPPED -> {
-					val startedAt = activeStarts.remove(pkg)
-					if (startedAt != null && event.timeStamp >= startedAt) {
-						val delta = event.timeStamp - startedAt
-						usageMsByPackage[pkg] = (usageMsByPackage[pkg] ?: 0L) + delta
-					}
-				}
-			}
-		}
-
-		// Close open foreground windows at end time.
-		activeStarts.forEach { (pkg, startedAt) ->
-			if (endTime >= startedAt) {
-				val delta = endTime - startedAt
-				usageMsByPackage[pkg] = (usageMsByPackage[pkg] ?: 0L) + delta
-			}
-		}
-
-		return packageNames.associateWith { packageName ->
-			val usedMs = usageMsByPackage[packageName] ?: 0L
-			(usedMs / 60000L).toInt()
-		}
+		return UsageStatsSupport.queryTodayUsageMillis(this, packageNames)
+			.mapValues { (_, usedMs) -> (usedMs / 60000L).toInt() }
 	}
 
 	private fun getRecentForegroundAppPackage(): String? {
-		val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-		val endTime = System.currentTimeMillis()
-		val startTime = endTime - 10 * 60 * 1000L
-
-		val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
-		val event = UsageEvents.Event()
-		var recentPackage: String? = null
-
-		while (usageEvents.hasNextEvent()) {
-			usageEvents.getNextEvent(event)
-			if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
-				val packageName = event.packageName
-				if (!packageName.isNullOrBlank() && packageName != this.packageName) {
-					recentPackage = packageName
-				}
-			}
-		}
-
-		return recentPackage
+		return UsageStatsSupport.getRecentForegroundAppPackage(
+			context = this,
+			excludedPackage = packageName,
+		)
 	}
 
 	private fun getFirstInstallTime(targetPackage: String): Long? {

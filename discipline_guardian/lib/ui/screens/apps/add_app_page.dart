@@ -139,14 +139,16 @@ class _AddAppPageState extends State<AddAppPage> {
 
   @override
   Widget build(BuildContext context) {
+    final showSearchBar = _selectedApp == null;
     final body = _isLoading
         ? const Center(child: CircularProgressIndicator())
-        : _selectedApp == null
+        : showSearchBar
             ? _buildAppList()
             : _buildLimitSetting();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -167,9 +169,10 @@ class _AddAppPageState extends State<AddAppPage> {
         child: Column(
           children: [
             // 搜索框
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
+            if (showSearchBar)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
                 controller: _searchController,
                 onChanged: (value) {
                   setState(() {
@@ -365,9 +368,9 @@ class _AddAppPageState extends State<AddAppPage> {
                 const SizedBox(height: 16),
                 Slider(
                   value: _limitMinutes.toDouble(),
-                  min: 15,
+                  min: 1,
                   max: 480,
-                  divisions: 31,
+                  divisions: 479,
                   activeColor: const Color(0xFFFF6B9D),
                   onChanged: (value) {
                     setState(() {
@@ -379,7 +382,7 @@ class _AddAppPageState extends State<AddAppPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '15m',
+                      '1m',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,

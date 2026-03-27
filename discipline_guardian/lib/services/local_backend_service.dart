@@ -254,6 +254,13 @@ class SystemPermissionReminderTarget {
 }
 
 class SystemPermissionHubStatus {
+  static const Set<String> _requiredMonitoringPermissionKeys = <String>{
+    'usage_stats',
+    'accessibility',
+    'overlay',
+    'battery_optimization',
+  };
+
   final bool usageStatsGranted;
   final bool accessibilityGranted;
   final bool overlayGranted;
@@ -279,6 +286,16 @@ class SystemPermissionHubStatus {
       notificationGranted &&
       batteryOptimizationIgnored &&
       keepAliveEnabled;
+
+  bool get hasRequiredMonitoringPermissions =>
+      missingRequiredMonitoringLabels.isEmpty;
+
+  List<String> get missingRequiredMonitoringLabels => missingReminderTargets
+      .where(
+        (target) => _requiredMonitoringPermissionKeys.contains(target.key),
+      )
+      .map((target) => target.label)
+      .toList(growable: false);
 
   List<SystemPermissionReminderTarget> get missingReminderTargets =>
       <SystemPermissionReminderTarget>[
@@ -552,12 +569,67 @@ class LocalBackendService {
   }
 
   Future<void> syncNativeInterceptionRules() async {
-    final lockedApps = await _appRepository.getLockedMonitoredApps();
-    final packages = lockedApps
+    final monitoredApps = await _appRepository.getMonitoredApps();
+    final packages = monitoredApps
+        .where((app) => app.isLocked)
         .map((app) => app.packageName)
         .where((pkg) => pkg.trim().isNotEmpty)
         .toList(growable: false);
     await _interceptionBridge.setBlockedPackages(packages);
+
+    final notificationSettings = await _settingsRepository.getNotificationSettings();
+    final schedule = await _settingsRepository.getScheduleSettings();
+    final notificationsEnabled =
+        await _systemPermissionsBridge.areNotificationsEnabled();
+    final whitelistEnabled = await _settingsRepository.getWhitelistEnabled();
+    final whitelistApps = whitelistEnabled
+        ? await _settingsRepository.getWhitelistApps()
+        : const <WhitelistAppModel>[];
+    final whitelistPackages = whitelistApps
+        .map((app) => app.packageName)
+        .toSet();
+    final planStatuses = await getPlanStatuses(
+      monitoredApps: monitoredApps,
+    );
+    final activePlanIds = planStatuses
+        .where((plan) => plan.isActive)
+        .map((plan) => plan.planId)
+        .toSet();
+
+    final monitoringRules = monitoredApps
+        .where(
+          (app) =>
+              app.packageName.trim().isNotEmpty &&
+              !whitelistPackages.contains(app.packageName),
+        )
+        .map((app) {
+          final planId = app.planId;
+          final baseLimitMinutes =
+              planId != null && activePlanIds.contains(planId)
+              ? 30
+              : app.dailyLimitMinutes;
+          return <String, Object?>{
+            'packageName': app.packageName,
+            'appName': app.appName,
+            'baseLimitMinutes': baseLimitMinutes,
+            'unlockLimitOverrideMinutes': app.unlockLimitOverrideMinutes,
+            'unlockLimitOverrideDate': app.unlockLimitOverrideDate,
+          };
+        })
+        .toList(growable: false);
+
+    await _interceptionBridge.syncUsageMonitoringConfig(
+      rules: monitoringRules,
+      reminderEnabled: notificationSettings.reminderEnabled,
+      reminderMinutes: notificationSettings.reminderMinutes.clamp(1, 60),
+      notificationsEnabled: notificationsEnabled,
+      soundEnabled: notificationSettings.soundEnabled,
+      scheduleEnabled: schedule.isEnabled,
+      workdayStart: schedule.workdayStart,
+      workdayEnd: schedule.workdayEnd,
+      weekendStart: schedule.weekendStart,
+      weekendEnd: schedule.weekendEnd,
+    );
   }
 
   Future<void> setNativeInterceptionEnabled(bool enabled) {
@@ -1160,24 +1232,27 @@ class LocalBackendService {
     return _settingsRepository.getScheduleSettings();
   }
 
-  Future<void> saveSchedule(ScheduleSettingsModel model) {
-    return _settingsRepository.saveScheduleSettings(model);
+  Future<void> saveSchedule(ScheduleSettingsModel model) async {
+    await _settingsRepository.saveScheduleSettings(model);
+    await syncNativeInterceptionRules();
   }
 
   Future<NotificationSettingsModel> getNotificationSettings() {
     return _settingsRepository.getNotificationSettings();
   }
 
-  Future<void> saveNotificationSettings(NotificationSettingsModel model) {
-    return _settingsRepository.saveNotificationSettings(model);
+  Future<void> saveNotificationSettings(NotificationSettingsModel model) async {
+    await _settingsRepository.saveNotificationSettings(model);
+    await syncNativeInterceptionRules();
   }
 
   Future<bool> getWhitelistEnabled() {
     return _settingsRepository.getWhitelistEnabled();
   }
 
-  Future<void> setWhitelistEnabled(bool value) {
-    return _settingsRepository.setWhitelistEnabled(value);
+  Future<void> setWhitelistEnabled(bool value) async {
+    await _settingsRepository.setWhitelistEnabled(value);
+    await syncNativeInterceptionRules();
   }
 
   Future<List<WhitelistAppModel>> getWhitelistApps() {
@@ -1187,15 +1262,17 @@ class LocalBackendService {
   Future<void> addWhitelistApp({
     required String appName,
     required String packageName,
-  }) {
-    return _settingsRepository.addWhitelistApp(
+  }) async {
+    await _settingsRepository.addWhitelistApp(
       appName: appName,
       packageName: packageName,
     );
+    await syncNativeInterceptionRules();
   }
 
-  Future<void> removeWhitelistApp(String whitelistId) {
-    return _settingsRepository.removeWhitelistApp(whitelistId);
+  Future<void> removeWhitelistApp(String whitelistId) async {
+    await _settingsRepository.removeWhitelistApp(whitelistId);
+    await syncNativeInterceptionRules();
   }
 
   Future<GrowthCardData> getGrowthCardData() async {
