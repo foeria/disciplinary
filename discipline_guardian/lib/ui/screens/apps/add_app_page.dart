@@ -1,3 +1,4 @@
+﻿import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,7 +6,7 @@ import '../../../platform/device_apps_bridge.dart';
 import '../../widgets/anime_button.dart';
 import '../../widgets/anime_card.dart';
 
-/// 可添加的应用数据模型
+/// 鍙坊鍔犵殑搴旂敤鏁版嵁妯″瀷
 class AvailableApp {
   final String appName;
   final String packageName;
@@ -13,18 +14,21 @@ class AvailableApp {
   final Color iconColor;
   final DateTime? installedAt;
   final bool isInstalled;
+  final String sortKey;
+  final String searchText;
 
-  const AvailableApp({
+  AvailableApp({
     required this.appName,
     required this.packageName,
     required this.icon,
     required this.iconColor,
     this.installedAt,
     this.isInstalled = true,
-  });
+  })  : sortKey = appName.trim().toLowerCase(),
+        searchText = '${appName.trim().toLowerCase()} ${packageName.trim().toLowerCase()}';
 }
 
-/// 添加应用页面
+/// 娣诲姞搴旂敤椤甸潰
 class AddAppPage extends StatefulWidget {
   final Future<void> Function(
     String appName,
@@ -45,8 +49,11 @@ class AddAppPage extends StatefulWidget {
 }
 
 class _AddAppPageState extends State<AddAppPage> {
+  static const Duration _searchDebounceDuration = Duration(milliseconds: 120);
+
   final DeviceAppsBridge _deviceAppsBridge = DeviceAppsBridge();
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
   String _searchQuery = '';
   AvailableApp? _selectedApp;
   int _limitMinutes = 60;
@@ -54,6 +61,7 @@ class _AddAppPageState extends State<AddAppPage> {
   String? _loadError;
 
   List<AvailableApp> _availableApps = const [];
+  List<AvailableApp> _visibleApps = const [];
 
   @override
   void initState() {
@@ -68,7 +76,8 @@ class _AddAppPageState extends State<AddAppPage> {
       }
       setState(() {
         _availableApps = const [];
-        _loadError = '当前平台暂不支持读取设备应用列表，请在 Android 设备上使用';
+        _visibleApps = const [];
+        _loadError = '当前设备暂不支持读取已安装应用列表，仅支持 Android 设备。';
         _isLoading = false;
       });
       return;
@@ -89,7 +98,7 @@ class _AddAppPageState extends State<AddAppPage> {
           })
           .where((app) => !widget.excludedPackages.contains(app.packageName))
           .toList(growable: false)
-        ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
+        ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
 
       if (!mounted) {
         return;
@@ -97,6 +106,7 @@ class _AddAppPageState extends State<AddAppPage> {
 
       setState(() {
         _availableApps = mappedApps;
+        _visibleApps = _filterApps(mappedApps, _searchQuery);
         _loadError = null;
         _isLoading = false;
       });
@@ -106,22 +116,39 @@ class _AddAppPageState extends State<AddAppPage> {
       }
       setState(() {
         _availableApps = const [];
-        _loadError = '读取设备应用失败，请检查权限或设备状态后重试';
+        _visibleApps = const [];
+        _loadError = '读取已安装应用失败，请检查权限或稍后重试。';
         _isLoading = false;
       });
     }
   }
 
-  List<AvailableApp> get _filteredApps {
-    if (_searchQuery.isEmpty) return _availableApps;
-    return _availableApps
-        .where((app) =>
-            app.appName.toLowerCase().contains(_searchQuery.toLowerCase()))
-        .toList();
+  List<AvailableApp> _filterApps(List<AvailableApp> apps, String query) {
+    if (query.isEmpty) {
+      return apps;
+    }
+    return apps
+        .where((app) => app.searchText.contains(query))
+        .toList(growable: false);
+  }
+
+  void _scheduleSearch(String value) {
+    final normalizedQuery = value.trim().toLowerCase();
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDuration, () {
+      if (!mounted || normalizedQuery == _searchQuery) {
+        return;
+      }
+      setState(() {
+        _searchQuery = normalizedQuery;
+        _visibleApps = _filterApps(_availableApps, normalizedQuery);
+      });
+    });
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -157,7 +184,7 @@ class _AddAppPageState extends State<AddAppPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          '添加应用',
+          '娣诲姞搴旂敤',
           style: TextStyle(
             color: Color(0xFF333333),
             fontWeight: FontWeight.w600,
@@ -168,31 +195,26 @@ class _AddAppPageState extends State<AddAppPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // 搜索框
             if (showSearchBar)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: TextField(
-                controller: _searchController,
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                },
-                decoration: InputDecoration(
-                  hintText: '搜索应用...',
-                  prefixIcon:
-                      const Icon(Icons.search, color: Color(0xFF999999)),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                  controller: _searchController,
+                  textInputAction: TextInputAction.search,
+                  onChanged: _scheduleSearch,
+                  decoration: InputDecoration(
+                    hintText: '搜索应用...',
+                    prefixIcon:
+                        const Icon(Icons.search, color: Color(0xFF999999)),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-            ),
-            // 应用列表
             Expanded(
               child: body,
             ),
@@ -203,19 +225,21 @@ class _AddAppPageState extends State<AddAppPage> {
   }
 
   Widget _buildAppList() {
+    final filteredApps = _visibleApps;
+
     if (_loadError != null) {
       return _buildLoadError();
     }
 
-    if (_filteredApps.isEmpty) {
+    if (filteredApps.isEmpty) {
       return _buildEmptyState();
     }
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _filteredApps.length,
+      itemCount: filteredApps.length,
       itemBuilder: (context, index) {
-        final app = _filteredApps[index];
+        final app = filteredApps[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: AnimeCard(
@@ -270,7 +294,7 @@ class _AddAppPageState extends State<AddAppPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 返回按钮和标题
+          // 杩斿洖鎸夐挳鍜屾爣棰?
           Row(
             children: [
               IconButton(
@@ -283,7 +307,7 @@ class _AddAppPageState extends State<AddAppPage> {
                 color: const Color(0xFF666666),
               ),
               const Text(
-                '设置每日限制',
+                '璁剧疆姣忔棩闄愬埗',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -293,7 +317,7 @@ class _AddAppPageState extends State<AddAppPage> {
             ],
           ),
           const SizedBox(height: 24),
-          // 选中应用信息
+          // 閫変腑搴旂敤淇℃伅
           if (_selectedApp != null)
             AnimeCard(
               padding: const EdgeInsets.all(16),
@@ -332,9 +356,9 @@ class _AddAppPageState extends State<AddAppPage> {
               ),
             ),
           const SizedBox(height: 32),
-          // 限制时间设置
+          // 闄愬埗鏃堕棿璁剧疆
           const Text(
-            '每日使用限制',
+            '姣忔棩浣跨敤闄愬埗',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -404,7 +428,7 @@ class _AddAppPageState extends State<AddAppPage> {
           SizedBox(
             width: double.infinity,
             child: AnimeButton(
-              text: '确认添加',
+              text: '纭娣诲姞',
               onPressed: () async {
                 await widget.onAppSelected(
                   _selectedApp!.appName,
@@ -436,7 +460,7 @@ class _AddAppPageState extends State<AddAppPage> {
             ),
             const SizedBox(height: 12),
             AnimeOutlinedButton(
-              text: '重试',
+              text: '閲嶈瘯',
               onPressed: () {
                 setState(() {
                   _isLoading = true;
@@ -461,7 +485,7 @@ class _AddAppPageState extends State<AddAppPage> {
             Icon(Icons.apps_outlined, size: 48, color: Colors.grey.shade400),
             const SizedBox(height: 12),
             Text(
-              _searchQuery.isEmpty ? '未读取到可添加应用' : '没有匹配的应用',
+              _searchQuery.isEmpty ? '没有可添加的应用。' : '没有匹配的应用。',
               style: const TextStyle(color: Color(0xFF666666), fontSize: 14),
             ),
           ],

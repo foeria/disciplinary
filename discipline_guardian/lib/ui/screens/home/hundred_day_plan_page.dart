@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../data/models/app_model.dart';
@@ -6,6 +8,17 @@ import '../../../services/local_backend_service.dart';
 import '../../widgets/anime_button.dart';
 import '../../widgets/anime_card.dart';
 import '../lock/lock_screen.dart';
+
+class _SearchableInstalledApp {
+  final DeviceInstalledApp app;
+  final String sortKey;
+  final String searchText;
+
+  _SearchableInstalledApp(this.app)
+      : sortKey = app.appName.trim().toLowerCase(),
+        searchText =
+            '${app.appName.trim().toLowerCase()} ${app.packageName.trim().toLowerCase()}';
+}
 
 class HundredDayPlanPage extends StatefulWidget {
   final String planId;
@@ -20,14 +33,19 @@ class HundredDayPlanPage extends StatefulWidget {
 }
 
 class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
+  static const Duration _searchDebounceDuration = Duration(milliseconds: 120);
+
   final LocalBackendService _backendService = LocalBackendService();
   final DeviceAppsBridge _deviceAppsBridge = DeviceAppsBridge();
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   bool _isLoading = true;
   bool _isSaving = false;
   String _searchQuery = '';
-  List<DeviceInstalledApp> _installedApps = const <DeviceInstalledApp>[];
+  List<_SearchableInstalledApp> _searchableApps =
+      const <_SearchableInstalledApp>[];
+  List<_SearchableInstalledApp> _visibleApps = const <_SearchableInstalledApp>[];
   Set<String> _selectedPackages = <String>{};
   HundredDayPlanStatus _planStatus = const HundredDayPlanStatus(
     planId: '',
@@ -57,6 +75,7 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -77,12 +96,16 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
       return;
     }
 
-    installedApps.sort((a, b) => a.appName.compareTo(b.appName));
+    final searchableApps = installedApps
+        .map(_SearchableInstalledApp.new)
+        .toList(growable: false)
+      ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
     if (!mounted) {
       return;
     }
     setState(() {
-      _installedApps = installedApps;
+      _searchableApps = searchableApps;
+      _visibleApps = _filterApps(searchableApps, _searchQuery);
       _planStatus = planStatus;
       _selectedPackages = planStatus.apps
           .map((app) => app.packageName)
@@ -91,18 +114,30 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
     });
   }
 
-  List<DeviceInstalledApp> get _filteredApps {
-    final query = _searchQuery.trim().toLowerCase();
+  List<_SearchableInstalledApp> _filterApps(
+    List<_SearchableInstalledApp> apps,
+    String query,
+  ) {
     if (query.isEmpty) {
-      return _installedApps;
+      return apps;
     }
-    return _installedApps
-        .where(
-          (app) =>
-              app.appName.toLowerCase().contains(query) ||
-              app.packageName.toLowerCase().contains(query),
-        )
+    return apps
+        .where((app) => app.searchText.contains(query))
         .toList(growable: false);
+  }
+
+  void _scheduleSearch(String value) {
+    final normalizedQuery = value.trim().toLowerCase();
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDuration, () {
+      if (!mounted || normalizedQuery == _searchQuery) {
+        return;
+      }
+      setState(() {
+        _searchQuery = normalizedQuery;
+        _visibleApps = _filterApps(_searchableApps, normalizedQuery);
+      });
+    });
   }
 
   Future<bool> _requestAuthorization({
@@ -156,8 +191,9 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
     FocusScope.of(context).unfocus();
     setState(() => _isSaving = true);
     try {
-      final selectedApps = _installedApps
-          .where((app) => _selectedPackages.contains(app.packageName))
+      final selectedApps = _searchableApps
+          .where((entry) => _selectedPackages.contains(entry.app.packageName))
+          .map((entry) => entry.app)
           .toList(growable: false);
       await _backendService.configurePlan(
         planId: widget.planId,
@@ -282,35 +318,7 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
           : SafeArea(
               child: Column(
                 children: [
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        _buildSummaryCard(),
-                        const SizedBox(height: 16),
-                        _buildCurrentPlanAppsCard(),
-                        const SizedBox(height: 16),
-                        _buildRuleCard(),
-                        if (_hasPlanApps) ...[
-                          const SizedBox(height: 16),
-                          _buildLockedPlanHintCard(),
-                        ] else ...[
-                          const SizedBox(height: 16),
-                          _buildSearchBar(),
-                          const SizedBox(height: 12),
-                          if (_filteredApps.isEmpty)
-                            _buildEmptyAppListCard()
-                          else
-                            ..._filteredApps.map(
-                              (app) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _buildSelectableAppCard(app),
-                              ),
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
+                  Expanded(child: _buildBodyScrollView()),
                   AnimatedPadding(
                     duration: const Duration(milliseconds: 180),
                     curve: Curves.easeOut,
@@ -318,9 +326,9 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
                     child: SafeArea(
                       top: false,
                       child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: _hasPlanApps
-                          ? Row(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: _hasPlanApps
+                            ? Row(
                               children: [
                                 Expanded(
                                   child: AnimeOutlinedButton(
@@ -358,13 +366,63 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
                                         ? () => Navigator.of(context).pop(false)
                                         : _confirmPlan,
                               ),
-                            ),
-                      ),
+                              ),
+                        ),
                     ),
                   ),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildBodyScrollView() {
+    final visibleApps = _visibleApps;
+
+    return CustomScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              [
+                _buildSummaryCard(),
+                const SizedBox(height: 16),
+                _buildCurrentPlanAppsCard(),
+                const SizedBox(height: 16),
+                _buildRuleCard(),
+                const SizedBox(height: 16),
+                if (_hasPlanApps) _buildLockedPlanHintCard() else _buildSearchBar(),
+                if (!_hasPlanApps) const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+        if (_hasPlanApps)
+          const SliverToBoxAdapter(child: SizedBox(height: 16))
+        else if (visibleApps.isEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            sliver: SliverToBoxAdapter(child: _buildEmptyAppListCard()),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final app = visibleApps[index].app;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildSelectableAppCard(app),
+                  );
+                },
+                childCount: visibleApps.length,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -650,6 +708,7 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
   Widget _buildSearchBar() {
     return TextField(
       controller: _searchController,
+      textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         hintText: '搜索要加入计划的应用',
         prefixIcon: const Icon(Icons.search),
@@ -661,11 +720,7 @@ class _HundredDayPlanPageState extends State<HundredDayPlanPage> {
           borderSide: BorderSide.none,
         ),
       ),
-      onChanged: (value) {
-        setState(() {
-          _searchQuery = value;
-        });
-      },
+      onChanged: _scheduleSearch,
     );
   }
 
